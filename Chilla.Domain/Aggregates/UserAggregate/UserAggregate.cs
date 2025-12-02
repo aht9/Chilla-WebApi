@@ -5,52 +5,76 @@ public class User : BaseEntity, IAggregateRoot
     public string FirstName { get; private set; }
     public string LastName { get; private set; }
     public string Username { get; private set; }
-    public string PhoneNumber { get; private set; } // Main Identity for OTP
-    public string? Email { get; private set; }      // Nullable
-    public string? PasswordHash { get; private set; } // Nullable if OTP only
+    public string PhoneNumber { get; private set; } 
+    public string? Email { get; private set; }      
+    public string? PasswordHash { get; private set; } 
     public bool IsActive { get; private set; } = true;
 
-    // Security
+    // Security & Lockout
     public int AccessFailedCount { get; private set; }
     public DateTimeOffset? LockoutEnd { get; private set; }
+    
+    // Notification Settings (Simplified as boolean flags for now, could be ValueObject)
+    public bool IsSmsNotificationEnabled { get; private set; } = true;
+    public bool IsEmailNotificationEnabled { get; private set; } = true;
 
-    // Authentication Tokens
     private readonly List<UserRefreshToken> _refreshTokens = new();
     public IReadOnlyCollection<UserRefreshToken> RefreshTokens => _refreshTokens.AsReadOnly();
 
-    private User() { } // EF Core
+    private User() { }
 
-    public User(string firstName, string lastName, string username, string phoneNumber, string? email)
+    public User(string firstName, string lastName, string username, string phoneNumber, string? email = null)
     {
+        if (string.IsNullOrWhiteSpace(firstName)) throw new ArgumentNullException(nameof(firstName));
+        if (string.IsNullOrWhiteSpace(lastName)) throw new ArgumentNullException(nameof(lastName));
+        if (string.IsNullOrWhiteSpace(username)) throw new ArgumentNullException(nameof(username));
+        if (string.IsNullOrWhiteSpace(phoneNumber)) throw new ArgumentNullException(nameof(phoneNumber));
+
         FirstName = firstName;
         LastName = lastName;
         Username = username;
         PhoneNumber = phoneNumber;
         Email = email;
+        IsActive = true;
     }
 
-    // --- Profile Actions ---
+    // --- Profile Management ---
+    public void UpdateProfile(string firstName, string lastName, string? email)
+    {
+        FirstName = firstName;
+        LastName = lastName;
+        Email = email; // Nullable allowed
+        UpdateAudit();
+    }
+
     public void SetPassword(string passwordHash)
     {
         PasswordHash = passwordHash;
         UpdateAudit();
     }
 
-    public void UpdateProfile(string firstName, string lastName, string? email)
+    public void ToggleActivity(bool isActive)
     {
-        FirstName = firstName;
-        LastName = lastName;
-        Email = email;
+        IsActive = isActive;
         UpdateAudit();
     }
 
-    // --- Security Actions ---
+    public void UpdateNotificationSettings(bool smsEnabled, bool emailEnabled)
+    {
+        IsSmsNotificationEnabled = smsEnabled;
+        IsEmailNotificationEnabled = emailEnabled;
+        UpdateAudit();
+    }
+
+    // --- Security Logic ---
+    public bool IsLockedOut => LockoutEnd.HasValue && LockoutEnd.Value > DateTimeOffset.UtcNow;
+
     public void RecordLoginFailure()
     {
         AccessFailedCount++;
         if (AccessFailedCount >= 3)
         {
-            LockoutEnd = DateTimeOffset.UtcNow.AddMinutes(20);
+            LockoutEnd = DateTimeOffset.UtcNow.AddMinutes(20); // Block duration
         }
         UpdateAudit();
     }
@@ -63,15 +87,16 @@ public class User : BaseEntity, IAggregateRoot
     }
 
     // --- Token Management ---
-    public void AddRefreshToken(string token, string remoteIp, double daysToExpire = 7)
+    public void AddRefreshToken(string token, string remoteIp, double daysToExpire = 30)
     {
-        // Remove old tokens to keep table clean (Optional logic)
-        _refreshTokens.RemoveAll(t => !t.IsActive && t.Created.AddDays(daysToExpire + 2) < DateTime.UtcNow);
-        
+        // Clean up old/invalid tokens to prevent table bloat
+        var invalidTokens = _refreshTokens.Where(t => !t.IsActive && t.Created.AddDays(daysToExpire + 2) < DateTime.UtcNow).ToList();
+        foreach (var t in invalidTokens) _refreshTokens.Remove(t);
+
         _refreshTokens.Add(new UserRefreshToken(token, DateTime.UtcNow.AddDays(daysToExpire), remoteIp));
     }
 
-    public bool RevokeRefreshToken(string token, string ipAddress, string reason = null)
+    public bool RevokeRefreshToken(string token, string ipAddress, string reason)
     {
         var existingToken = _refreshTokens.SingleOrDefault(t => t.Token == token);
         if (existingToken != null && existingToken.IsActive)

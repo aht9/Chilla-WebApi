@@ -29,7 +29,7 @@ public static class ExpressionCombiner
     }
 }
 
-class ParameterReplaceVisitor : ExpressionVisitor
+internal class ParameterReplaceVisitor : ExpressionVisitor
 {
     private readonly ParameterExpression _from, _to;
     public ParameterReplaceVisitor(ParameterExpression from, ParameterExpression to)
