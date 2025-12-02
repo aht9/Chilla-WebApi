@@ -1,3 +1,4 @@
+using Chilla.Infrastructure;
 using Serilog;
 
 namespace Chilla.WebApi;
@@ -17,6 +18,12 @@ public class Program
             .CreateLogger();
 
         builder.Host.UseSerilog(); // جایگزین کردن لاگر پیش‌فرض
+        
+        
+        // Add Layers
+        // builder.Services.AddApplication(); // MediatR, Validators, etc.
+        builder.Services.AddInfrastructure(builder.Configuration); // DbContext, Jwt, BackgroundJobs
+        
         
         // Add services to the container.
 

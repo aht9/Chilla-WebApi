@@ -1,5 +1,4 @@
 ﻿using Chilla.Domain.Common;
-using Microsoft.EntityFrameworkCore;
 
 namespace Chilla.Infrastructure.Persistence;
 

@@ -1,7 +1,7 @@
 ﻿using System.Text.Json;
 using System.Threading.Tasks.Dataflow;
+using Chilla.Domain.Aggregates.NotificationAggregate;
 using Chilla.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -11,17 +11,22 @@ namespace Chilla.Infrastructure.BackgroundJobs;
 public class OutboxProcessor : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly ActionBlock<OutboxMessage> _workerBlock;
     private readonly ILogger<OutboxProcessor> _logger;
-    
-    public OutboxProcessor(IServiceProvider serviceProvider)
+    private readonly ActionBlock<Guid> _workerBlock; // Change: Pass ID instead of Entity to avoid context issues
+
+    public OutboxProcessor(IServiceProvider serviceProvider, ILogger<OutboxProcessor> logger)
     {
         _serviceProvider = serviceProvider;
+        _logger = logger;
         
-        // TPL Dataflow ActionBlock definition
-        _workerBlock = new ActionBlock<OutboxMessage>(
-            async message => await ProcessMessage(message),
-            new ExecutionDataflowBlockOptions { MaxDegreeOfParallelism = 4 } // پردازش همزمان ۴ پیام
+        // تنظیمات پردازش موازی
+        _workerBlock = new ActionBlock<Guid>(
+            async id => await ProcessMessage(id),
+            new ExecutionDataflowBlockOptions 
+            { 
+                MaxDegreeOfParallelism = 4,
+                SingleProducerConstrained = true
+            } 
         );
     }
 
@@ -29,51 +34,97 @@ public class OutboxProcessor : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            using var scope = _serviceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            
-            // Fetch unprocessed messages
-            var messages = await db.OutboxMessages
-                .Where(m => m.ProcessedDate == null)
-                .Take(50)
-                .ToListAsync(stoppingToken);
-
-            foreach (var msg in messages)
+            try
             {
-                // Post to TPL Block
-                _workerBlock.Post(msg);
+                using var scope = _serviceProvider.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                
+                // فقط ID پیام‌های پردازش نشده را می‌گیریم تا در ترد جداگانه دوباره از دیتابیس بگیریم
+                // این کار از مشکلات Concurrency و Disposed Context جلوگیری می‌کند
+                var messageIds = await db.OutboxMessages
+                    .Where(m => m.ProcessedDate == null)
+                    .OrderBy(m => m.OccurredOn)
+                    .Take(50)
+                    .Select(m => m.Id)
+                    .ToListAsync(stoppingToken);
+
+                foreach (var id in messageIds)
+                {
+                    await _workerBlock.SendAsync(id, stoppingToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error fetching outbox messages");
             }
 
-            await Task.Delay(5000, stoppingToken); // Polling interval
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
         }
+        
+        _workerBlock.Complete();
+        await _workerBlock.Completion;
     }
 
-    private async Task ProcessMessage(OutboxMessage message)
+    private async Task ProcessMessage(Guid messageId)
     {
+        using var scope = _serviceProvider.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        
+        // واکشی مجدد پیام در اسکوپ جدید
+        var message = await db.OutboxMessages.FindAsync(messageId);
+        if (message == null || message.ProcessedDate != null) return;
+
         try 
         {
             _logger.LogInformation("Processing Outbox Message: {Type} | ID: {Id}", message.Type, message.Id);
 
             if (message.Type == "UserRegisteredEvent")
             {
-                // Deserialize payload
-                var evt = JsonSerializer.Deserialize<UserRegisteredEvent>(message.Content);
+                // استفاده از JsonElement برای انعطاف‌پذیری در خواندن پی‌لود (چون ممکن است ساختار DTO دقیق نباشد)
+                using var doc = JsonDocument.Parse(message.Content);
+                var root = doc.RootElement;
                 
-                // Real Logic Implementation:
-                // فرض کنید ISmsSender تزریق شده است
-                // await _smsSender.SendWelcomeSms(evt.Phone);
-                
-                _logger.LogInformation("Welcome SMS sent to {Phone}", evt.Phone);
+                var userId = Guid.Parse(root.GetProperty("UserId").GetString()!);
+                var phone = root.GetProperty("Phone").GetString();
+
+                if (!string.IsNullOrEmpty(phone))
+                {
+                    // 1. شبیه‌سازی ارسال SMS (در واقعیت ISmsSender صدا زده می‌شود)
+                    bool isSuccess = true; 
+                    string error = null;
+                    
+                    // await _smsSender.SendAsync(phone, "به چله خوش آمدید!");
+
+                    // 2. ثبت لاگ دقیق در دیتابیس (NotificationLog)
+                    var notifLog = new NotificationLog(
+                        userId, 
+                        NotificationType.Sms, 
+                        "Welcome to Chilla Application", 
+                        phone
+                    );
+
+                    if (isSuccess)
+                        notifLog.MarkAsSent();
+                    else
+                        notifLog.MarkAsFailed(error ?? "Unknown error");
+
+                    db.NotificationLogs.Add(notifLog);
+                }
             }
             
+            // مارک کردن پیام به عنوان پردازش شده
             message.ProcessedDate = DateTime.UtcNow;
-            // ذخیره تغییرات در دیتابیس باید اینجا انجام شود (در اسکوپ جدید)
+            
+            // ذخیره همه تغییرات (آپدیت Outbox + اینسرت NotificationLog) در یک تراکنش
+            await db.SaveChangesAsync();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error processing outbox message {Id}", message.Id);
+            
+            // ثبت خطا در خود پیام برای بررسی بعدی
             message.Error = ex.Message;
-            // Retry policy implementation needed here
+            try { await db.SaveChangesAsync(); } catch { /* Ignore save error */ }
         }
     }
 }
