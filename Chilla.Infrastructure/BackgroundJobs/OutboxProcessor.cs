@@ -1,8 +1,10 @@
-﻿using System.Threading.Tasks.Dataflow;
+﻿using System.Text.Json;
+using System.Threading.Tasks.Dataflow;
 using Chilla.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Chilla.Infrastructure.BackgroundJobs;
 
@@ -10,7 +12,8 @@ public class OutboxProcessor : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ActionBlock<OutboxMessage> _workerBlock;
-
+    private readonly ILogger<OutboxProcessor> _logger;
+    
     public OutboxProcessor(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
@@ -47,14 +50,30 @@ public class OutboxProcessor : BackgroundService
 
     private async Task ProcessMessage(OutboxMessage message)
     {
-        // Logic to dispatch event, send Email/SMS, or trigger SignalR
-        // Example: Sending notification via SignalR
-        if (message.Type == "UserRegisteredEvent")
+        try 
         {
-            // Send Welcome Email logic...
-            // Send SignalR Notification logic...
+            _logger.LogInformation("Processing Outbox Message: {Type} | ID: {Id}", message.Type, message.Id);
+
+            if (message.Type == "UserRegisteredEvent")
+            {
+                // Deserialize payload
+                var evt = JsonSerializer.Deserialize<UserRegisteredEvent>(message.Content);
+                
+                // Real Logic Implementation:
+                // فرض کنید ISmsSender تزریق شده است
+                // await _smsSender.SendWelcomeSms(evt.Phone);
+                
+                _logger.LogInformation("Welcome SMS sent to {Phone}", evt.Phone);
+            }
+            
+            message.ProcessedDate = DateTime.UtcNow;
+            // ذخیره تغییرات در دیتابیس باید اینجا انجام شود (در اسکوپ جدید)
         }
-        
-        // Note: You need a scope here to update the DB that message is processed
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing outbox message {Id}", message.Id);
+            message.Error = ex.Message;
+            // Retry policy implementation needed here
+        }
     }
 }

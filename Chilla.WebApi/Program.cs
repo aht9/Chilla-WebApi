@@ -1,3 +1,5 @@
+using Serilog;
+
 namespace Chilla.WebApi;
 
 public class Program
@@ -6,6 +8,16 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
+        // تنظیم Serilog
+        Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(builder.Configuration)
+            .Enrich.FromLogContext()
+            .WriteTo.Console()
+            .WriteTo.File("logs/chilla-.txt", rollingInterval: RollingInterval.Day)
+            .CreateLogger();
+
+        builder.Host.UseSerilog(); // جایگزین کردن لاگر پیش‌فرض
+        
         // Add services to the container.
 
         builder.Services.AddControllers();
