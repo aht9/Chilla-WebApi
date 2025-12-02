@@ -8,7 +8,7 @@ using Chilla.Domain.Common;
 
 namespace Chilla.Infrastructure.Persistence;
 
-public class AppDbContext : DbContext
+public class AppDbContext : DbContext, IUnitOfWork
 {
     // Aggregate Roots & Entities
     public DbSet<User> Users { get; set; }
@@ -26,23 +26,20 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(builder);
 
-        // 1. Apply all configurations from the current assembly (The files we just created)
+        // 1. Apply all configurations from the current assembly
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         // 2. Apply Soft Delete Global Query Filter dynamically
-        // این روش حرفه‌ای باعث می‌شود لازم نباشد برای هر Entity دستی فیلتر بنویسید.
         foreach (var entityType in builder.Model.GetEntityTypes())
         {
             if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
             {
-                // استفاده از متد کمکی برای اعمال فیلتر IsDeleted
                 var method = SetGlobalQueryMethod.MakeGenericMethod(entityType.ClrType);
                 method.Invoke(this, new object[] { builder });
             }
         }
     }
 
-    // متد کمکی برای رفلکشن
     static readonly MethodInfo SetGlobalQueryMethod = typeof(AppDbContext)
         .GetMethods(BindingFlags.Public | BindingFlags.Instance)
         .Single(t => t.IsGenericMethod && t.Name == nameof(SetGlobalQuery));
@@ -51,6 +48,8 @@ public class AppDbContext : DbContext
     {
         builder.Entity<T>().HasQueryFilter(e => !e.IsDeleted);
     }
+    
+    // Note: SaveChangesAsync signature already matches IUnitOfWork, so explicit implementation is implicitly satisfied.
 }
 
 public class OutboxMessage
