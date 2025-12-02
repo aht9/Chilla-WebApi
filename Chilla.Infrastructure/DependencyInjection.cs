@@ -12,6 +12,7 @@ using Chilla.Infrastructure.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Quartz;
 
 namespace Chilla.Infrastructure;
 
@@ -65,8 +66,30 @@ public static class DependencyInjection
 
         // 3. Background Services (Outbox Processor)
         // سرویس پس‌زمینه برای پردازش پیام‌های Outbox
-        services.AddHostedService<OutboxProcessor>();
+        services.AddQuartz(q =>
+        {
+            // استفاده از DI کانتینر مایکروسافت برای ساختن اینستنس جاب‌ها
+            q.UseMicrosoftDependencyInjectionJobFactory();
 
+            // تعریف کلید یکتا برای جاب پردازش Outbox
+            var jobKey = new JobKey("OutboxProcessJob");
+
+            // ثبت جاب
+            q.AddJob<OutboxProcessJob>(opts => opts.WithIdentity(jobKey));
+
+            // زمان‌بندی اجرا: هر 5 ثانیه یک‌بار
+            q.AddTrigger(opts => opts
+                .ForJob(jobKey)
+                .WithIdentity("OutboxProcessJob-Trigger")
+                .WithSimpleSchedule(x => x
+                    .WithIntervalInSeconds(5)
+                    .RepeatForever()));
+        });
+
+        // افزودن سرویس هوست Quartz که مدیریت اجرای جاب‌ها در پس‌زمینه را بر عهده دارد
+        services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
+        
+        
         // 4. Authentication & Security Services
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IOtpService, OtpService>();
