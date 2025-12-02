@@ -5,15 +5,15 @@ public class User : BaseEntity, IAggregateRoot
     public string FirstName { get; private set; }
     public string LastName { get; private set; }
     public string Username { get; private set; }
-    public string PhoneNumber { get; private set; } 
-    public string? Email { get; private set; }      
-    public string? PasswordHash { get; private set; } 
+    public string PhoneNumber { get; private set; }
+    public string? Email { get; private set; }
+    public string? PasswordHash { get; private set; }
     public bool IsActive { get; private set; } = true;
 
     // Security & Lockout
     public int AccessFailedCount { get; private set; }
     public DateTimeOffset? LockoutEnd { get; private set; }
-    
+
     // Notification Settings (Simplified as boolean flags for now, could be ValueObject)
     public bool IsSmsNotificationEnabled { get; private set; } = true;
     public bool IsEmailNotificationEnabled { get; private set; } = true;
@@ -21,7 +21,13 @@ public class User : BaseEntity, IAggregateRoot
     private readonly List<UserRefreshToken> _refreshTokens = new();
     public IReadOnlyCollection<UserRefreshToken> RefreshTokens => _refreshTokens.AsReadOnly();
 
-    private User() { }
+    // افزودن کالکشن نقش‌ها
+    private readonly List<UserRole> _roles = new();
+    public IReadOnlyCollection<UserRole> Roles => _roles.AsReadOnly();
+
+    private User()
+    {
+    }
 
     public User(string firstName, string lastName, string username, string phoneNumber, string? email = null)
     {
@@ -76,6 +82,7 @@ public class User : BaseEntity, IAggregateRoot
         {
             LockoutEnd = DateTimeOffset.UtcNow.AddMinutes(20); // Block duration
         }
+
         UpdateAudit();
     }
 
@@ -90,7 +97,8 @@ public class User : BaseEntity, IAggregateRoot
     public void AddRefreshToken(string token, string remoteIp, double daysToExpire = 30)
     {
         // Clean up old/invalid tokens to prevent table bloat
-        var invalidTokens = _refreshTokens.Where(t => !t.IsActive && t.Created.AddDays(daysToExpire + 2) < DateTime.UtcNow).ToList();
+        var invalidTokens = _refreshTokens
+            .Where(t => !t.IsActive && t.Created.AddDays(daysToExpire + 2) < DateTime.UtcNow).ToList();
         foreach (var t in invalidTokens) _refreshTokens.Remove(t);
 
         _refreshTokens.Add(new UserRefreshToken(token, DateTime.UtcNow.AddDays(daysToExpire), remoteIp));
@@ -104,6 +112,28 @@ public class User : BaseEntity, IAggregateRoot
             existingToken.Revoke(ipAddress, reason);
             return true;
         }
+
         return false;
+    }
+
+    // متد برای افزودن نقش به کاربر
+    public void AssignRole(Guid roleId)
+    {
+        if (!_roles.Any(r => r.RoleId == roleId))
+        {
+            _roles.Add(new UserRole(roleId));
+            UpdateAudit();
+        }
+    }
+
+    // متد برای حذف نقش از کاربر
+    public void RemoveRole(Guid roleId)
+    {
+        var role = _roles.SingleOrDefault(r => r.RoleId == roleId);
+        if (role != null)
+        {
+            _roles.Remove(role);
+            UpdateAudit();
+        }
     }
 }
