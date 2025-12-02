@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 
-namespace Chilla_WebApi.Controllers;
+namespace Chilla.WebApi.Controllers;
 
 [ApiController]
 [Route("[controller]")]

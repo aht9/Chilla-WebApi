@@ -1,4 +1,4 @@
-namespace Chilla_WebApi;
+namespace Chilla.WebApi;
 
 public class Program
 {

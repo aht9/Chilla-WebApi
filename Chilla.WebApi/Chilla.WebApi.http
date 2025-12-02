@@ -1,0 +1,6 @@
+@Chilla.WebApi_HostAddress = http://localhost:5017
+
+GET {{Chilla.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
