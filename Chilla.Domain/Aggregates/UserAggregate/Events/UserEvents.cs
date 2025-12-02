@@ -1,4 +1,6 @@
-﻿namespace Chilla.Domain.Aggregates.UserAggregate.Events;
+﻿using MediatR;
+
+namespace Chilla.Domain.Aggregates.UserAggregate.Events;
 
 public record UserRegisteredEvent(User User) : IDomainEvent
 {

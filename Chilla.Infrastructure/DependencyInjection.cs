@@ -2,6 +2,8 @@
 using Chilla.Infrastructure.Authentication;
 using Chilla.Infrastructure.BackgroundJobs;
 using Chilla.Infrastructure.Persistence;
+using Chilla.Infrastructure.Persistence.Interceptors;
+using Chilla.Infrastructure.Services;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,41 +14,37 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        // 1. EF Core Configuration (Write Side)
+        // 0. Interceptors
+        services.AddScoped<ConvertDomainEventsToOutboxInterceptor>();
+        services.AddScoped<AuditableEntityInterceptor>();
+
+        // 1. EF Core Configuration
         var connectionString = configuration.GetConnectionString("DefaultConnection");
         
-        services.AddDbContext<AppDbContext>(options =>
+        services.AddDbContext<AppDbContext>((sp, options) =>
         {
-            options.UseSqlServer(connectionString, sqlOptions => 
-            {
-                // تنظیمات تاب‌آوری در برابر قطعی‌های موقت شبکه
-                sqlOptions.EnableRetryOnFailure(
-                    maxRetryCount: 5,
-                    maxRetryDelay: TimeSpan.FromSeconds(30),
-                    errorNumbersToAdd: null);
-            });
+            var outboxInterceptor = sp.GetRequiredService<ConvertDomainEventsToOutboxInterceptor>();
+            var auditInterceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
+
+            options.UseSqlServer(connectionString)
+                .AddInterceptors(auditInterceptor, outboxInterceptor); // ترتیب مهم است
         });
 
-        // 2. Dapper Configuration (Read Side)
-        services.AddScoped<IDbConnection>(sp => 
-            new SqlConnection(connectionString));
-
-        // 3. Redis Caching
+        // 2. Dapper & Redis
+        services.AddScoped<IDbConnection>(sp => new SqlConnection(connectionString));
         services.AddStackExchangeRedisCache(options =>
         {
             options.Configuration = configuration.GetConnectionString("Redis");
             options.InstanceName = "Chilla_";
         });
 
-        // 4. Background Services (Outbox)
+        // 3. Background Services
         services.AddHostedService<OutboxProcessor>();
 
-        // 5. Authentication Services
+        // 4. Services
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-
-        // 6. External Services (Implementation of Interfaces defined in Application Layer)
-        // services.AddTransient<IEmailSender, EmailSender>(); // To be implemented
-        // services.AddTransient<ISmsSender, SmsSender>();     // To be implemented
+        services.AddScoped<IOtpService, OtpService>();
+        services.AddScoped<ISmsSender, SmsSender>(); // Simple Logger Implementation
 
         return services;
     }

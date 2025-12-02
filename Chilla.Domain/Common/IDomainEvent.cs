@@ -1,6 +1,8 @@
-﻿namespace Chilla.Domain.Common;
+﻿using MediatR;
 
-public interface IDomainEvent
+namespace Chilla.Domain.Common;
+
+public interface IDomainEvent: INotification
 {
     DateTime OccurredOn { get; }
 }

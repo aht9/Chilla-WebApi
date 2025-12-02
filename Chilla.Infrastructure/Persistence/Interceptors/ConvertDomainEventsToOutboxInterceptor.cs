@@ -22,26 +22,31 @@ public class ConvertDomainEventsToOutboxInterceptor : SaveChangesInterceptor
     {
         if (context == null) return;
 
-        // 1. پیدا کردن تمام موجودیت‌هایی که DomainEvent دارند
-        var outboxMessages = context.ChangeTracker
+        // 1. استخراج موجودیت‌هایی که ایونت دارند
+        var aggregates = context.ChangeTracker
             .Entries<BaseEntity>()
-            .Select(x => x.Entity)
-            .SelectMany(aggregate =>
-            {
-                var domainEvents = aggregate.DomainEvents.ToList();
-                aggregate.ClearDomainEvents(); // پاک کردن ایونت‌ها بعد از برداشتن
-                return domainEvents;
-            })
-            .Select(domainEvent => new OutboxMessage
-            {
-                Id = Guid.NewGuid(),
-                OccurredOn = DateTime.UtcNow,
-                Type = domainEvent.GetType().Name, // ذخیره نام کلاس ایونت برای Deserialize
-                Content = JsonSerializer.Serialize(domainEvent, domainEvent.GetType()) // سریالایز کردن کامل
-            })
-            .ToList();
+            .Where(e => e.Entity.DomainEvents.Any())
+            .Select(e => e.Entity);
 
-        // 2. افزودن به DbSet مربوطه
+        var outboxMessages = new List<OutboxMessage>();
+
+        foreach (var aggregate in aggregates)
+        {
+            foreach (var domainEvent in aggregate.DomainEvents)
+            {
+                outboxMessages.Add(new OutboxMessage
+                {
+                    Id = Guid.NewGuid(),
+                    OccurredOn = DateTime.UtcNow,
+                    // تغییر مهم: ذخیره نام کامل تایپ شامل اسمبلی برای Deserialization دقیق
+                    Type = domainEvent.GetType().AssemblyQualifiedName!, 
+                    Content = JsonSerializer.Serialize(domainEvent, domainEvent.GetType())
+                });
+            }
+            
+            aggregate.ClearDomainEvents();
+        }
+
         if (outboxMessages.Any())
         {
             await context.Set<OutboxMessage>().AddRangeAsync(outboxMessages);
