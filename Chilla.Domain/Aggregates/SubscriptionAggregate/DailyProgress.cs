@@ -2,28 +2,39 @@
 
 public class DailyProgress : BaseEntity
 {
-    public Guid PlanTemplateItemId { get; private set; } // Reference to what task was done
-    public DateTime Date { get; private set; }
+    public Guid PlanTemplateItemId { get; private set; }
+    public DateTime ScheduledDate { get; private set; } // تاریخی که باید انجام میشد
+    public DateTime? CompletedAt { get; private set; }  // لحظه واقعی انجام
     public bool IsCompleted { get; private set; }
-    
-    // Value stores the "result".
-    // If Counter: store the count (e.g., 100).
-    // If Boolean: store 1 or 0.
     public int Value { get; private set; }
+    
+    // --- فیلدهای جدید برای سناریوی تعهد ---
+    public bool IsLateEntry { get; private set; } // آیا با تأخیر/تعهد ثبت شده؟
+    public string? LateReason { get; private set; } // متن تعهد یا دلیل
 
     private DailyProgress() { }
 
-    public DailyProgress(Guid planTemplateItemId, DateTime date, bool isCompleted, int value)
+    public DailyProgress(Guid planTemplateItemId, DateTime scheduledDate, int value, bool isLateEntry = false, string? lateReason = null)
     {
         PlanTemplateItemId = planTemplateItemId;
-        Date = date;
-        IsCompleted = isCompleted;
+        ScheduledDate = scheduledDate.Date; // فقط تاریخ مهم است
+        CompletedAt = DateTime.UtcNow;
+        IsCompleted = true; // فعلاً فرض بر تکمیل است مگر منطق شمارنده متفاوت باشد
         Value = value;
+        IsLateEntry = isLateEntry;
+        LateReason = lateReason;
     }
 
-    public void UpdateValue(int newValue)
+    public void UpdateValue(int newValue, bool isLateEntry, string? lateReason)
     {
         Value = newValue;
-        // Logic can be added here to un-complete if value < target
+        CompletedAt = DateTime.UtcNow;
+        
+        // اگر قبلاً Late بوده، وضعیتش حفظ می‌شود مگر اینکه آپدیت جدید هم Late باشد
+        if (isLateEntry)
+        {
+            IsLateEntry = true;
+            LateReason = lateReason;
+        }
     }
 }

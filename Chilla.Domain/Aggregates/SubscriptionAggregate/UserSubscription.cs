@@ -10,7 +10,6 @@ public class UserSubscription : BaseEntity, IAggregateRoot
     public DateTime? EndDate { get; private set; }
     public SubscriptionStatus Status { get; private set; }
     
-    // Concurrency check for progress updates is handled by BaseEntity.RowVersion
     private readonly List<DailyProgress> _progress = new();
     public IReadOnlyCollection<DailyProgress> Progress => _progress.AsReadOnly();
 
@@ -27,26 +26,52 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         Status = SubscriptionStatus.Active;
     }
 
+    // متد استاندارد برای انجام کار (بدون تأخیر)
     public void MarkTaskAsComplete(Guid planTemplateItemId, int valueEntered = 0)
     {
         if (Status != SubscriptionStatus.Active) 
             throw new InvalidOperationException("Cannot update progress on an inactive subscription.");
 
-        // Validation: Ensure the task belongs to the plan (Ideally checked via service/query before calling, 
-        // but here we ensure state consistency).
-        
         var today = DateTime.UtcNow.Date;
         
-        // Find existing progress for this task TODAY
-        var existing = _progress.SingleOrDefault(p => p.PlanTemplateItemId == planTemplateItemId && p.Date.Date == today);
+        // Fix 1: 'Date' property is renamed to 'ScheduledDate'
+        var existing = _progress.SingleOrDefault(p => p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
 
         if (existing != null)
         {
-            existing.UpdateValue(valueEntered);
+            // Fix 2: UpdateValue now requires 3 arguments. 
+            // Since this is normal completion, isLateEntry = false, lateReason = null.
+            existing.UpdateValue(valueEntered, false, null);
         }
         else
         {
-            _progress.Add(new DailyProgress(planTemplateItemId, today, true, valueEntered));
+            // Fix 3: Constructor signature changed. 
+            // Old: (itemId, date, isCompleted(bool), value(int))
+            // New: (itemId, scheduledDate, value(int), isLate(bool), reason(string))
+            // We pass valueEntered. isLate defaults to false.
+            _progress.Add(new DailyProgress(planTemplateItemId, today, valueEntered));
+        }
+        
+        UpdateAudit();
+    }
+    
+    // متد جدید برای ثبت با تأخیر (طبق سناریوی شما)
+    public void MarkTaskAsCompleteWithCommitment(Guid planTemplateItemId, int valueEntered, string commitmentReason)
+    {
+        if (Status != SubscriptionStatus.Active) 
+            throw new InvalidOperationException("Cannot update progress on an inactive subscription.");
+
+        var today = DateTime.UtcNow.Date;
+        
+        var existing = _progress.SingleOrDefault(p => p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
+
+        if (existing != null)
+        {
+            existing.UpdateValue(valueEntered, true, commitmentReason);
+        }
+        else
+        {
+            _progress.Add(new DailyProgress(planTemplateItemId, today, valueEntered, true, commitmentReason));
         }
         
         UpdateAudit();

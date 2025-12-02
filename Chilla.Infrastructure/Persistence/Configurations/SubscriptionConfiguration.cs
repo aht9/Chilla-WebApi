@@ -18,8 +18,6 @@ public class SubscriptionConfiguration : IEntityTypeConfiguration<UserSubscripti
         // Indexing for fast lookups
         builder.HasIndex(s => s.UserId);
         builder.HasIndex(s => s.PlanId);
-        // ایندکس ترکیبی برای جلوگیری از تکرار اشتراک فعال یک پلن برای یک کاربر (اختیاری بر اساس بیزنس)
-        // builder.HasIndex(s => new { s.UserId, s.PlanId }).HasFilter("[Status] = 'Active'");
 
         // --- Daily Progress ---
         // جدول بسیار مهم و پر تراکنش
@@ -29,11 +27,17 @@ public class SubscriptionConfiguration : IEntityTypeConfiguration<UserSubscripti
             progBuilder.HasKey(dp => dp.Id);
             progBuilder.WithOwner().HasForeignKey("UserSubscriptionId");
 
-            progBuilder.Property(dp => dp.Date).HasColumnType("date"); // فقط تاریخ، بدون ساعت
+            // اصلاح شد: Date -> ScheduledDate
+            progBuilder.Property(dp => dp.ScheduledDate).HasColumnType("date"); // فقط تاریخ، بدون ساعت
             
-            // ایندکس برای گزارش‌گیری سریع
-            progBuilder.HasIndex(dp => dp.Date);
+            // اصلاح شد: ایندکس روی ScheduledDate
+            progBuilder.HasIndex(dp => dp.ScheduledDate);
             
+            // مپ کردن فیلدهای جدید
+            progBuilder.Property(dp => dp.CompletedAt).IsRequired(false);
+            progBuilder.Property(dp => dp.IsLateEntry).HasDefaultValue(false);
+            progBuilder.Property(dp => dp.LateReason).HasMaxLength(500).IsRequired(false);
+
             progBuilder.UsePropertyAccessMode(PropertyAccessMode.Field);
         });
 
