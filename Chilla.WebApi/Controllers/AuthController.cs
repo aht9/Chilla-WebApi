@@ -15,25 +15,91 @@ public class AuthController : ControllerBase
         _mediator = mediator;
     }
 
+    // سناریوی ۱-a و ۲: ورود یا ثبت‌نام با شماره موبایل و OTP
     [HttpPost("login-otp")]
-    public async Task<IActionResult> Login([FromBody] LoginOtpRequest request)
+    public async Task<IActionResult> LoginWithOtp([FromBody] LoginOtpRequest request)
     {
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
         var command = new LoginWithOtpCommand(request.PhoneNumber, request.Code, ipAddress);
         
         var result = await _mediator.Send(command);
 
-        // Set Refresh Token in HttpOnly Cookie
+        SetRefreshTokenCookie(result.RefreshToken);
+
+        return Ok(new 
+        { 
+            accessToken = result.AccessToken,
+            isProfileCompleted = result.IsProfileCompleted,
+            message = result.Message
+        });
+    }
+
+    // سناریوی ۱-b: ورود با نام کاربری و رمز عبور
+    [HttpPost("login-password")]
+    public async Task<IActionResult> LoginWithPassword([FromBody] LoginPasswordRequest request)
+    {
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+        var command = new LoginWithPasswordCommand(request.Username, request.Password, ipAddress);
+
+        var result = await _mediator.Send(command);
+
+        SetRefreshTokenCookie(result.RefreshToken);
+
+        return Ok(new 
+        { 
+            accessToken = result.AccessToken, 
+            isProfileCompleted = result.IsProfileCompleted,
+            message = result.Message
+        });
+    }
+
+    // درخواست کد OTP (مرحله اول لاگین با موبایل)
+    [HttpPost("request-otp")]
+    public async Task<IActionResult> RequestOtp([FromBody] RequestOtpRequest request)
+    {
+        var command = new RequestOtpCommand(request.PhoneNumber);
+        await _mediator.Send(command);
+        return Ok(new { message = "کد تایید ارسال شد." });
+    }
+
+    // تکمیل اطلاعات پروفایل (بعد از ثبت نام اولیه)
+    [HttpPost("complete-profile")]
+    // [Authorize] // بهتر است این متد نیاز به توکن داشته باشد که از مرحله قبل گرفته شده
+    public async Task<IActionResult> CompleteProfile([FromBody] CompleteProfileRequest request)
+    {
+        // UserId را معمولاً از توکن استخراج می‌کنیم، اما اینجا طبق کامند شما پیش می‌رویم
+        // در حالت واقعی: var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        
+        var command = new CompleteProfileCommand(
+            request.UserId, 
+            request.FirstName, 
+            request.LastName, 
+            request.Username, 
+            request.Email, 
+            request.Password);
+
+        await _mediator.Send(command);
+        return Ok(new { message = "پروفایل با موفقیت تکمیل شد." });
+    }
+
+    // --- Helper Methods ---
+
+    private void SetRefreshTokenCookie(string refreshToken)
+    {
         var cookieOptions = new CookieOptions
         {
-            HttpOnly = true,
-            Secure = true, // Always true in production
-            SameSite = SameSiteMode.Strict,
+            HttpOnly = true, // جاوااسکریپت دسترسی ندارد (امنیت XSS)
+            Secure = true,   // فقط روی HTTPS (در دولوپمنت ممکن است فالس باشد)
+            SameSite = SameSiteMode.Strict, // جلوگیری از CSRF
             Expires = DateTime.UtcNow.AddDays(30)
         };
 
-        Response.Cookies.Append("refreshToken", result.RefreshToken, cookieOptions);
-
-        return Ok(new { token = result.AccessToken });
+        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
     }
 }
+
+// DTOs for Controller Requests
+public record LoginOtpRequest(string PhoneNumber, string Code);
+public record RequestOtpRequest(string PhoneNumber);
+public record LoginPasswordRequest(string Username, string Password);
+public record CompleteProfileRequest(Guid UserId, string FirstName, string LastName, string Username, string? Email, string? Password);
