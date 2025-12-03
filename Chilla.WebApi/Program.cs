@@ -1,3 +1,4 @@
+using Chilla.Application.Extensions;
 using Chilla.Infrastructure;
 using Serilog;
 
@@ -23,6 +24,7 @@ public class Program
         // Add Layers
         // builder.Services.AddApplication(); // MediatR, Validators, etc.
         builder.Services.AddInfrastructure(builder.Configuration); // DbContext, Jwt, BackgroundJobs
+        builder.Services.AddApplication(builder.Configuration);   
         
         
         // Add services to the container.

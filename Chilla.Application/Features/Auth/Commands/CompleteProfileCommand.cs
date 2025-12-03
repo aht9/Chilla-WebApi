@@ -1,4 +1,5 @@
-﻿using Chilla.Domain.Aggregates.UserAggregate;
+﻿using Chilla.Application.Common.Interfaces;
+using Chilla.Domain.Aggregates.UserAggregate;
 using Chilla.Domain.Common;
 using MediatR;
 
@@ -10,11 +11,16 @@ public class CompleteProfileHandler : IRequestHandler<CompleteProfileCommand, bo
 {
     private readonly IUserRepository _userRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IPasswordHasher _passwordHasher; // Injected
 
-    public CompleteProfileHandler(IUserRepository userRepository, IUnitOfWork unitOfWork)
+    public CompleteProfileHandler(
+        IUserRepository userRepository, 
+        IUnitOfWork unitOfWork,
+        IPasswordHasher passwordHasher)
     {
         _userRepository = userRepository;
         _unitOfWork = unitOfWork;
+        _passwordHasher = passwordHasher;
     }
 
     public async Task<bool> Handle(CompleteProfileCommand request, CancellationToken cancellationToken)
@@ -22,7 +28,6 @@ public class CompleteProfileHandler : IRequestHandler<CompleteProfileCommand, bo
         var user = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
         if (user == null) throw new Exception("User not found.");
 
-        // چک کردن یکتایی Username جدید اگر تغییر کرده باشد
         if (user.Username != request.Username)
         {
             var existingUser = await _userRepository.GetByUsernameAsync(request.Username, cancellationToken);
@@ -33,8 +38,9 @@ public class CompleteProfileHandler : IRequestHandler<CompleteProfileCommand, bo
         
         if (!string.IsNullOrEmpty(request.Password))
         {
-            // TODO: Use Hash Service
-            user.SetPassword("Hashed_" + request.Password);
+            // Fixed: Use Hash Service
+            var hashedPassword = _passwordHasher.HashPassword(request.Password);
+            user.SetPassword(hashedPassword);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
