@@ -1,10 +1,12 @@
 ﻿using System.Reflection;
+using Chilla.Domain.Aggregates.InvoiceAggregate;
 using Chilla.Domain.Aggregates.NotificationAggregate;
 using Chilla.Domain.Aggregates.PlanAggregate;
 using Chilla.Domain.Aggregates.RoleAggregate;
 using Chilla.Domain.Aggregates.SubscriptionAggregate;
 using Chilla.Domain.Aggregates.UserAggregate;
 using Chilla.Domain.Common;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Chilla.Infrastructure.Persistence;
 
@@ -19,6 +21,9 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<BlockedIp> BlockedIps { get; set; }
     public DbSet<RequestLog> RequestLogs { get; set; }
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
+    public DbSet<Invoice> Invoices { get; set; } // Added Invoice DbSet
+
+    private IDbContextTransaction? _currentTransaction;
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
@@ -26,10 +31,10 @@ public class AppDbContext : DbContext, IUnitOfWork
     {
         base.OnModelCreating(builder);
 
-        // 1. Apply all configurations from the current assembly
+        // Apply all configurations from the current assembly
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
-        // 2. Apply Soft Delete Global Query Filter dynamically
+        // Apply Soft Delete Global Query Filter dynamically
         foreach (var entityType in builder.Model.GetEntityTypes())
         {
             if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
@@ -48,14 +53,64 @@ public class AppDbContext : DbContext, IUnitOfWork
     {
         builder.Entity<T>().HasQueryFilter(e => !e.IsDeleted);
     }
-    
-    // Note: SaveChangesAsync signature already matches IUnitOfWork, so explicit implementation is implicitly satisfied.
+
+    // --- Transaction Management Implementation ---
+
+    public async Task BeginTransactionAsync()
+    {
+        if (_currentTransaction != null) return;
+        _currentTransaction = await Database.BeginTransactionAsync();
+    }
+
+    public async Task CommitTransactionAsync()
+    {
+        try
+        {
+            await SaveChangesAsync();
+            if (_currentTransaction != null)
+            {
+                await _currentTransaction.CommitAsync();
+            }
+        }
+        catch
+        {
+            await RollbackTransactionAsync();
+            throw;
+        }
+        finally
+        {
+            if (_currentTransaction != null)
+            {
+                _currentTransaction.Dispose();
+                _currentTransaction = null;
+            }
+        }
+    }
+
+    public async Task RollbackTransactionAsync()
+    {
+        try
+        {
+            if (_currentTransaction != null)
+            {
+                await _currentTransaction.RollbackAsync();
+            }
+        }
+        finally
+        {
+            if (_currentTransaction != null)
+            {
+                _currentTransaction.Dispose();
+                _currentTransaction = null;
+            }
+        }
+    }
 }
 
 public class OutboxMessage
 {
     public Guid Id { get; set; }
-    public string Type { get; set; }
+    public string Type { get; set; } 
     public string Content { get; set; } 
     public DateTime OccurredOn { get; set; }
     public DateTime? ProcessedDate { get; set; }
