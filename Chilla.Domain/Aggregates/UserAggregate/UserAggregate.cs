@@ -1,4 +1,6 @@
-﻿namespace Chilla.Domain.Aggregates.UserAggregate;
+﻿using Chilla.Domain.Aggregates.UserAggregate.Events;
+
+namespace Chilla.Domain.Aggregates.UserAggregate;
 
 public class User : BaseEntity, IAggregateRoot
 {
@@ -25,8 +27,15 @@ public class User : BaseEntity, IAggregateRoot
     private readonly List<UserRole> _roles = new();
     public IReadOnlyCollection<UserRole> Roles => _roles.AsReadOnly();
 
-    private User()
+    // سازنده برای ثبت‌نام سریع با شماره موبایل
+    public User(string phoneNumber)
     {
+        if (string.IsNullOrWhiteSpace(phoneNumber)) throw new ArgumentNullException(nameof(phoneNumber));
+        PhoneNumber = phoneNumber;
+        Username = phoneNumber; // موقتاً نام کاربری همان شماره تلفن است
+        IsActive = true;
+        
+        AddDomainEvent(new UserRegisteredEvent(this));
     }
 
     public User(string firstName, string lastName, string username, string phoneNumber, string? email = null)
@@ -42,9 +51,31 @@ public class User : BaseEntity, IAggregateRoot
         PhoneNumber = phoneNumber;
         Email = email;
         IsActive = true;
+        AddDomainEvent(new UserRegisteredEvent(this));
     }
 
     // --- Profile Management ---
+    public bool IsProfileCompleted()
+    {
+        return !string.IsNullOrWhiteSpace(FirstName) && !string.IsNullOrWhiteSpace(LastName);
+    }
+    
+    public void CompleteProfile(string firstName, string lastName, string username, string? email)
+    {
+        if (string.IsNullOrWhiteSpace(firstName)) throw new ArgumentException("نام الزامی است");
+        if (string.IsNullOrWhiteSpace(lastName)) throw new ArgumentException("نام خانوادگی الزامی است");
+        if (string.IsNullOrWhiteSpace(username)) throw new ArgumentException("نام کاربری الزامی است");
+
+        FirstName = firstName;
+        LastName = lastName;
+        Username = username;
+        Email = email;
+        
+        UpdateAudit();
+        AddDomainEvent(new UserProfileUpdatedEvent(this.Id));
+    }
+    
+    
     public void UpdateProfile(string firstName, string lastName, string? email)
     {
         FirstName = firstName;
@@ -104,6 +135,13 @@ public class User : BaseEntity, IAggregateRoot
         _refreshTokens.Add(new UserRefreshToken(token, DateTime.UtcNow.AddDays(daysToExpire), remoteIp));
     }
 
+    public bool ValidatePassword(string passwordHashToCompare)
+    {
+        // در واقعیت باید هش پسورد ورودی را چک کنیم، اینجا فرض مقایسه هش شده است
+        return PasswordHash == passwordHashToCompare; 
+    }
+    
+    
     public bool RevokeRefreshToken(string token, string ipAddress, string reason)
     {
         var existingToken = _refreshTokens.SingleOrDefault(t => t.Token == token);
