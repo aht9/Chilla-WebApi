@@ -142,16 +142,40 @@ public class User : BaseEntity, IAggregateRoot
     }
     
     
-    public bool RevokeRefreshToken(string token, string ipAddress, string reason)
+    public bool RevokeRefreshToken(string token, string ipAddress, string reason, string? replacedByToken = null)
     {
         var existingToken = _refreshTokens.SingleOrDefault(t => t.Token == token);
-        if (existingToken != null && existingToken.IsActive)
+        
+        // حتی اگر توکن Active نباشد ولی هنوز Revoke نشده باشد، می‌توانیم آن را Revoke کنیم
+        if (existingToken != null && !existingToken.IsRevoked)
         {
-            existingToken.Revoke(ipAddress, reason);
+            existingToken.Revoke(ipAddress, reason, replacedByToken);
             return true;
         }
 
         return false;
+    }
+
+    // متد جدید برای چرخش امن توکن (Rotation)
+    public void RotateRefreshToken(UserRefreshToken oldToken, string newTokenValue, string ipAddress)
+    {
+        var tokenToRevoke = _refreshTokens.SingleOrDefault(t => t.Id == oldToken.Id);
+        if (tokenToRevoke != null)
+        {
+            tokenToRevoke.Revoke(ipAddress, "Replaced by new token", newTokenValue);
+        }
+        
+        AddRefreshToken(newTokenValue, ipAddress);
+    }
+
+    // متد جدید برای ابطال همه توکن‌ها (در موارد امنیتی یا تغییر پسورد)
+    public void RevokeAllRefreshTokens(string ipAddress, string reason)
+    {
+        foreach (var token in _refreshTokens.Where(t => !t.IsRevoked))
+        {
+            token.Revoke(ipAddress, reason);
+        }
+        UpdateAudit();
     }
 
     // متد برای افزودن نقش به کاربر

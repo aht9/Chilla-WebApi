@@ -1,5 +1,6 @@
 ﻿using Chilla.Application.Features.Auth.Commands;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Chilla.WebApi.Controllers;
@@ -80,6 +81,56 @@ public class AuthController : ControllerBase
 
         await _mediator.Send(command);
         return Ok(new { message = "پروفایل با موفقیت تکمیل شد." });
+    }
+    
+    // Chilla.WebApi/Controllers/AuthController.cs Update
+
+    [HttpPost("refresh-token")]
+    public async Task<IActionResult> RefreshToken()
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+        if (string.IsNullOrEmpty(refreshToken))
+            return Unauthorized(new { message = "توکن یافت نشد." });
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+
+        try
+        {
+            var result = await _mediator.Send(new RefreshTokenCommand(refreshToken, ipAddress));
+        
+            // آپدیت کوکی با توکن جدید (چرخش)
+            SetRefreshTokenCookie(result.RefreshToken);
+
+            return Ok(new { 
+                accessToken = result.AccessToken, 
+                isProfileCompleted = result.IsProfileCompleted 
+            });
+        }
+        catch (Exception)
+        {
+            // هر خطایی در تمدید یعنی کاربر باید دوباره لاگین کند
+            Response.Cookies.Delete("refreshToken");
+            return Unauthorized(new { message = "نشست منقضی شده است." });
+        }
+    }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout()
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        if (!string.IsNullOrEmpty(refreshToken))
+        {
+            // ارسال کامند برای باطل کردن توکن در دیتابیس
+            await _mediator.Send(new RevokeTokenCommand(refreshToken, ipAddress));
+        }
+
+        // پاک کردن کوکی
+        Response.Cookies.Delete("refreshToken", new CookieOptions { Secure = true, SameSite = SameSiteMode.Strict });
+    
+        return Ok(new { message = "خروج با موفقیت انجام شد." });
     }
 
     // --- Helper Methods ---

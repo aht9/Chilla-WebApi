@@ -1,6 +1,7 @@
 ﻿using System.Data;
 using System.Text.Json;
 using Chilla.Application.Features.Users.Dtos;
+using Chilla.Infrastructure.Persistence.Extensions;
 using MediatR;
 using Microsoft.Extensions.Caching.Distributed;
 
