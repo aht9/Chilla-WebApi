@@ -1,4 +1,5 @@
 ﻿using Chilla.Application.Features.Auth.Commands;
+using Chilla.Application.Features.Auth.DTOs;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,60 +17,102 @@ public class AuthController : ControllerBase
         _mediator = mediator;
     }
 
-    // سناریوی ۱-a و ۲: ورود یا ثبت‌نام با شماره موبایل و OTP
-    [HttpPost("login-otp")]
-    public async Task<IActionResult> LoginWithOtp([FromBody] LoginOtpRequest request)
-    {
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
-        var command = new LoginWithOtpCommand(request.PhoneNumber, request.Code, ipAddress);
-        
-        var result = await _mediator.Send(command);
-
-        SetRefreshTokenCookie(result.RefreshToken);
-
-        return Ok(new 
-        { 
-            accessToken = result.AccessToken,
-            isProfileCompleted = result.IsProfileCompleted,
-            message = result.Message
-        });
-    }
-
-    // سناریوی ۱-b: ورود با نام کاربری و رمز عبور
-    [HttpPost("login-password")]
-    public async Task<IActionResult> LoginWithPassword([FromBody] LoginPasswordRequest request)
-    {
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
-        var command = new LoginWithPasswordCommand(request.Username, request.Password, ipAddress);
-
-        var result = await _mediator.Send(command);
-
-        SetRefreshTokenCookie(result.RefreshToken);
-
-        return Ok(new 
-        { 
-            accessToken = result.AccessToken, 
-            isProfileCompleted = result.IsProfileCompleted,
-            message = result.Message
-        });
-    }
-
-    // درخواست کد OTP (مرحله اول لاگین با موبایل)
+    // ----------------------------------------------------------------
+    // 1. ورود / ثبت‌نام با OTP
+    // ----------------------------------------------------------------
     [HttpPost("request-otp")]
     public async Task<IActionResult> RequestOtp([FromBody] RequestOtpRequest request)
     {
         var command = new RequestOtpCommand(request.PhoneNumber);
         await _mediator.Send(command);
-        return Ok(new { message = "کد تایید ارسال شد." });
+        return Ok(new { message = "کد تایید با موفقیت ارسال شد." });
     }
 
-    // تکمیل اطلاعات پروفایل (بعد از ثبت نام اولیه)
+    [HttpPost("login-otp")]
+    public async Task<IActionResult> LoginWithOtp([FromBody] LoginOtpRequest request)
+    {
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+        
+        var command = new LoginWithOtpCommand(request.PhoneNumber, request.Code, ipAddress);
+        var result = await _mediator.Send(command);
+
+        // ذخیره امن توکن‌ها در کوکی
+        SetTokenCookies(result.AccessToken, result.RefreshToken);
+
+        // نکته امنیتی: توکن‌ها را در Body برنمی‌گردانیم تا در LocalStorage ذخیره نشوند
+        return Ok(new 
+        { 
+            isProfileCompleted = result.IsProfileCompleted,
+            message = result.Message 
+        });
+    }
+
+    // ----------------------------------------------------------------
+    // 2. ورود با رمز عبور (سناریوی جایگزین)
+    // ----------------------------------------------------------------
+    [HttpPost("login-password")]
+    public async Task<IActionResult> LoginWithPassword([FromBody] LoginPasswordRequest request)
+    {
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+
+        var command = new LoginWithPasswordCommand(request.Username, request.Password, ipAddress);
+        var result = await _mediator.Send(command);
+
+        SetTokenCookies(result.AccessToken, result.RefreshToken);
+
+        return Ok(new 
+        { 
+            isProfileCompleted = result.IsProfileCompleted,
+            message = result.Message 
+        });
+    }
+
+    // ----------------------------------------------------------------
+    // 3. تمدید توکن (Refresh Token Rotation)
+    // ----------------------------------------------------------------
+    [HttpPost("refresh-token")]
+    public async Task<IActionResult> RefreshToken()
+    {
+        // دریافت رفرش توکن فقط از کوکی HttpOnly
+        var refreshToken = Request.Cookies["refreshToken"];
+        
+        if (string.IsNullOrEmpty(refreshToken))
+            return Unauthorized(new { message = "توکن یافت نشد. لطفاً مجدداً وارد شوید." });
+
+        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+
+        try
+        {
+            var command = new RefreshTokenCommand(refreshToken, ipAddress);
+            var result = await _mediator.Send(command);
+
+            // جایگزینی توکن‌های قدیمی با جدید (Rotation)
+            SetTokenCookies(result.AccessToken, result.RefreshToken);
+
+            return Ok(new 
+            { 
+                isProfileCompleted = result.IsProfileCompleted,
+                message = "نشست کاربری تمدید شد."
+            });
+        }
+        catch (Exception)
+        {
+            // اگر تمدید شکست خورد (توکن سوخته/نامعتبر)، کوکی‌ها را پاک می‌کنیم تا کاربر لاگ‌اوت شود
+            ForceLogoutCookies();
+            return Unauthorized(new { message = "نشست کاربری منقضی شده است." });
+        }
+    }
+
+    // ----------------------------------------------------------------
+    // 4. تکمیل پروفایل (کاربران جدید)
+    // ----------------------------------------------------------------
     [HttpPost("complete-profile")]
-    // [Authorize] // بهتر است این متد نیاز به توکن داشته باشد که از مرحله قبل گرفته شده
+    [Authorize] // اکنون که AccessToken در کوکی است، این اتریبیوت کار می‌کند
     public async Task<IActionResult> CompleteProfile([FromBody] CompleteProfileRequest request)
     {
-        // UserId را معمولاً از توکن استخراج می‌کنیم، اما اینجا طبق کامند شما پیش می‌رویم
-        // در حالت واقعی: var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        // در معماری صحیح، UserId را باید از Claims توکن استخراج کنیم نه ورودی کاربر
+        // var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        // اما فعلاً طبق درخواست شما از Body می‌خوانیم:
         
         var command = new CompleteProfileCommand(
             request.UserId, 
@@ -82,75 +125,70 @@ public class AuthController : ControllerBase
         await _mediator.Send(command);
         return Ok(new { message = "پروفایل با موفقیت تکمیل شد." });
     }
-    
-    // Chilla.WebApi/Controllers/AuthController.cs Update
 
-    [HttpPost("refresh-token")]
-    public async Task<IActionResult> RefreshToken()
-    {
-        var refreshToken = Request.Cookies["refreshToken"];
-        if (string.IsNullOrEmpty(refreshToken))
-            return Unauthorized(new { message = "توکن یافت نشد." });
-
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
-
-        try
-        {
-            var result = await _mediator.Send(new RefreshTokenCommand(refreshToken, ipAddress));
-        
-            // آپدیت کوکی با توکن جدید (چرخش)
-            SetRefreshTokenCookie(result.RefreshToken);
-
-            return Ok(new { 
-                accessToken = result.AccessToken, 
-                isProfileCompleted = result.IsProfileCompleted 
-            });
-        }
-        catch (Exception)
-        {
-            // هر خطایی در تمدید یعنی کاربر باید دوباره لاگین کند
-            Response.Cookies.Delete("refreshToken");
-            return Unauthorized(new { message = "نشست منقضی شده است." });
-        }
-    }
-
+    // ----------------------------------------------------------------
+    // 5. خروج امن (Logout)
+    // ----------------------------------------------------------------
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout()
     {
         var refreshToken = Request.Cookies["refreshToken"];
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-
+        
         if (!string.IsNullOrEmpty(refreshToken))
         {
-            // ارسال کامند برای باطل کردن توکن در دیتابیس
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+            // ابطال توکن در دیتابیس
             await _mediator.Send(new RevokeTokenCommand(refreshToken, ipAddress));
         }
 
-        // پاک کردن کوکی
-        Response.Cookies.Delete("refreshToken", new CookieOptions { Secure = true, SameSite = SameSiteMode.Strict });
-    
+        // پاکسازی کوکی‌ها از مرورگر
+        ForceLogoutCookies();
+
         return Ok(new { message = "خروج با موفقیت انجام شد." });
     }
 
-    // --- Helper Methods ---
+    // ================================================================
+    // Helper Methods (Private)
+    // ================================================================
 
-    private void SetRefreshTokenCookie(string refreshToken)
+    private void SetTokenCookies(string accessToken, string refreshToken)
     {
         var cookieOptions = new CookieOptions
         {
-            HttpOnly = true, // جاوااسکریپت دسترسی ندارد (امنیت XSS)
-            Secure = true,   // فقط روی HTTPS (در دولوپمنت ممکن است فالس باشد)
-            SameSite = SameSiteMode.Strict, // جلوگیری از CSRF
-            Expires = DateTime.UtcNow.AddDays(30)
+            HttpOnly = true,    // غیرقابل دسترسی برای JS (ضد XSS)
+            Secure = true,      // فقط HTTPS (در محیط Dev لوکال هم معمولاً کار می‌کند اگر Https باشد)
+            SameSite = SameSiteMode.Strict, // جلوگیری از CSRF (بسیار مهم)
+            IsEssential = true  // کوکی ضروری (حتی اگر کاربر کوکی‌های مارکتینگ را رد کند)
         };
 
-        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
+        // 1. تنظیم Access Token (مثلاً ۱۵ دقیقه)
+        var accessOptions = new CookieOptions
+        {
+            HttpOnly = true, Secure = true, SameSite = SameSiteMode.Strict, IsEssential = true,
+            Expires = DateTime.UtcNow.AddMinutes(15) // باید با تنظیمات JwtSettings هماهنگ باشد
+        };
+        Response.Cookies.Append("accessToken", accessToken, accessOptions);
+
+        // 2. تنظیم Refresh Token (مثلاً ۳۰ روز)
+        var refreshOptions = new CookieOptions
+        {
+            HttpOnly = true, Secure = true, SameSite = SameSiteMode.Strict, IsEssential = true,
+            Expires = DateTime.UtcNow.AddDays(30)
+        };
+        Response.Cookies.Append("refreshToken", refreshToken, refreshOptions);
+    }
+
+    private void ForceLogoutCookies()
+    {
+        var deleteOptions = new CookieOptions 
+        { 
+            HttpOnly = true, 
+            Secure = true, 
+            SameSite = SameSiteMode.Strict 
+        };
+        
+        Response.Cookies.Delete("accessToken", deleteOptions);
+        Response.Cookies.Delete("refreshToken", deleteOptions);
     }
 }
-
-// DTOs for Controller Requests
-public record LoginOtpRequest(string PhoneNumber, string Code);
-public record RequestOtpRequest(string PhoneNumber);
-public record LoginPasswordRequest(string Username, string Password);
-public record CompleteProfileRequest(Guid UserId, string FirstName, string LastName, string Username, string? Email, string? Password);

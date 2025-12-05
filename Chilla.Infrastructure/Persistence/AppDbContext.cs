@@ -12,16 +12,29 @@ namespace Chilla.Infrastructure.Persistence;
 
 public class AppDbContext : DbContext, IUnitOfWork
 {
-    // Aggregate Roots & Entities
+    // --- 1. Aggregate Roots (اصلی‌ها) ---
     public DbSet<User> Users { get; set; }
     public DbSet<Plan> Plans { get; set; }
     public DbSet<UserSubscription> UserSubscriptions { get; set; }
     public DbSet<Role> Roles { get; set; }
+    public DbSet<Invoice> Invoices { get; set; }
     public DbSet<NotificationLog> NotificationLogs { get; set; }
+    
+    // --- 2. Security & Logs ---
     public DbSet<BlockedIp> BlockedIps { get; set; }
     public DbSet<RequestLog> RequestLogs { get; set; }
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
-    public DbSet<Invoice> Invoices { get; set; } // Added Invoice DbSet
+
+    // --- 3. Child Entities (اضافه شده پس از تغییر معماری به HasMany) ---
+    // افزودن این‌ها باعث می‌شود EF Core راحت‌تر جداول آن‌ها را مدیریت کند
+    // و مایگریشن‌ها دقیق‌تر تولید شوند.
+    
+    public DbSet<UserRefreshToken> UserRefreshTokens { get; set; }
+    public DbSet<UserRole> UserRoles { get; set; }
+    public DbSet<RolePermission> RolePermissions { get; set; }
+    
+    public DbSet<PlanTemplateItem> PlanTemplateItems { get; set; }
+    public DbSet<DailyProgress> DailyProgresses { get; set; }
 
     private IDbContextTransaction? _currentTransaction;
 
@@ -31,12 +44,21 @@ public class AppDbContext : DbContext, IUnitOfWork
     {
         base.OnModelCreating(builder);
 
-        // Apply all configurations from the current assembly
+        // اعمال تمام کانفیگ‌های موجود در اسمبلی (UserConfiguration, PlanConfiguration, ...)
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
-        // Apply Soft Delete Global Query Filter dynamically
+        // اعمال فیلتر Soft Delete به صورت Global
+        ApplySoftDeleteQueryFilter(builder);
+    }
+
+    private void ApplySoftDeleteQueryFilter(ModelBuilder builder)
+    {
         foreach (var entityType in builder.Model.GetEntityTypes())
         {
+            // موجودیت‌های Owned نیاز به فیلتر جداگانه ندارند (چون همراه پدر لود می‌شوند)
+            // اما چون ما اکثر آن‌ها را به Entity مستقل تبدیل کردیم، اکنون شامل این فیلتر می‌شوند.
+            if (entityType.IsOwned()) continue;
+
             if (typeof(BaseEntity).IsAssignableFrom(entityType.ClrType))
             {
                 var method = SetGlobalQueryMethod.MakeGenericMethod(entityType.ClrType);
@@ -54,7 +76,7 @@ public class AppDbContext : DbContext, IUnitOfWork
         builder.Entity<T>().HasQueryFilter(e => !e.IsDeleted);
     }
 
-    // --- Transaction Management Implementation ---
+    // --- Transaction Management ---
 
     public async Task BeginTransactionAsync()
     {
@@ -107,6 +129,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     }
 }
 
+// کلاس OutboxMessage که برای الگوی Transactional Outbox استفاده می‌شود
 public class OutboxMessage
 {
     public Guid Id { get; set; }

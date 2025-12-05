@@ -1,4 +1,5 @@
 ﻿using System.Data;
+using System.Text;
 using Chilla.Domain.Aggregates.InvoiceAggregate;
 using Chilla.Domain.Aggregates.PlanAggregate;
 using Chilla.Domain.Aggregates.SubscriptionAggregate;
@@ -12,9 +13,11 @@ using Chilla.Infrastructure.Persistence.Interceptors;
 using Chilla.Infrastructure.Persistence.Repositories;
 using Chilla.Infrastructure.Services;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using Quartz;
 
 namespace Chilla.Infrastructure;
@@ -92,6 +95,49 @@ public static class DependencyInjection
         services.AddScoped<ISmsSender, SmsSender>();
         services.AddScoped<IEmailSender, EmailSender>();
 
+        
+        // --- [SECTION FIX]: Authentication Configuration ---
+        // این بخش دلیل خطای شما بود که احتمالا جا افتاده است
+        var jwtSettings = configuration.GetSection("JwtSettings");
+        var secretKey = Encoding.UTF8.GetBytes(jwtSettings["Secret"]!);
+
+        services.AddAuthentication(options =>
+            {
+                // تعریف استراتژی پیش‌فرض: همه چیز باید با JWT چک شود
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtSettings["Issuer"],
+                    ValidAudience = jwtSettings["Audience"],
+                    IssuerSigningKey = new SymmetricSecurityKey(secretKey),
+                    ClockSkew = TimeSpan.Zero
+                };
+            
+                // خواندن توکن از کوکی (برای امنیت بیشتر)
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        if (context.Request.Cookies.ContainsKey("accessToken"))
+                        {
+                            context.Token = context.Request.Cookies["accessToken"];
+                        }
+                        return Task.CompletedTask;
+                    }
+                };
+            });
+
+        services.AddAuthorization();
+        // ---------------------------------------------------
         return services;
     }
 }
