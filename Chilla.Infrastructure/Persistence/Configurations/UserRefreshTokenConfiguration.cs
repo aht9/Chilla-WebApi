@@ -15,7 +15,7 @@ public class UserRefreshTokenConfiguration : IEntityTypeConfiguration<UserRefres
         builder.Property(t => t.Token).HasMaxLength(500).IsRequired();
         builder.Property(t => t.CreatedByIp).HasMaxLength(50);
         builder.Property(t => t.RevokedByIp).HasMaxLength(50);
-        
+        builder.Property(t => t.RowVersion).IsRowVersion();
         // Soft Delete به صورت خودکار توسط AppDbContext اعمال می‌شود
     }
 }

@@ -18,5 +18,7 @@ public class RoleConfiguration : IEntityTypeConfiguration<Role>
             .WithOne()
             .HasForeignKey("RoleId") // Shadow FK
             .OnDelete(DeleteBehavior.Cascade);
+        
+        builder.Property(t => t.RowVersion).IsRowVersion();
     }
 }

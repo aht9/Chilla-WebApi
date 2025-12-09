@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Chilla.Application.Features.Users.Dtos;
 using Chilla.Infrastructure.Persistence.Extensions;
+using Chilla.Infrastructure.Services;
 using MediatR;
 using Microsoft.Extensions.Caching.Distributed;
 
@@ -12,12 +13,12 @@ public record GetUserProfileQuery(Guid UserId) : IRequest<UserProfileDto>;
 public class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery, UserProfileDto>
 {
     private readonly IDbConnection _dbConnection; // Dapper
-    private readonly IDistributedCache _cache;    // Redis
+    private readonly ICacheService _cacheService;    // Redis
 
-    public GetUserProfileHandler(IDbConnection dbConnection, IDistributedCache cache)
+    public GetUserProfileHandler(IDbConnection dbConnection, ICacheService cacheService)
     {
         _dbConnection = dbConnection;
-        _cache = cache;
+        _cacheService = cacheService;
     }
 
     public async Task<UserProfileDto> Handle(GetUserProfileQuery request, CancellationToken cancellationToken)
@@ -25,11 +26,8 @@ public class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery, UserPr
         string cacheKey = $"user:{request.UserId}";
         
         // 1. Try Redis
-        var cachedData = await _cache.GetStringAsync(cacheKey);
-        if (!string.IsNullOrEmpty(cachedData))
-        {
-            return JsonSerializer.Deserialize<UserProfileDto>(cachedData);
-        }
+        var cachedUser = await _cacheService.GetAsync<UserProfileDto>(cacheKey, cancellationToken);
+        if (cachedUser != null) return cachedUser;
 
         // 2. Query DB with Dapper (Fast, Read-Only)
         // Ignoring Soft Deleted users in SQL directly
@@ -38,15 +36,12 @@ public class GetUserProfileHandler : IRequestHandler<GetUserProfileQuery, UserPr
             FROM Users 
             WHERE Id = @Id AND IsDeleted = 0";
 
-        var userDto = await _dbConnection.QuerySingleOrDefaultAsync<UserProfileDto>(sql, new { Id = request.UserId });
+        var userDto = await _dbConnection.QuerySingleOrDefaultAsync<UserProfileDto>(sql, new { Id = request.UserId }, cancellationToken: cancellationToken);
 
         if (userDto == null) throw new KeyNotFoundException("User not found");
 
         // 3. Set Cache
-        await _cache.SetStringAsync(cacheKey, JsonSerializer.Serialize(userDto), new DistributedCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10)
-        });
+        await _cacheService.SetAsync(cacheKey, userDto, TimeSpan.FromMinutes(10), cancellationToken);
 
         return userDto;
     }

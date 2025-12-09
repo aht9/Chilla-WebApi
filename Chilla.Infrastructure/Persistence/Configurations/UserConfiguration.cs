@@ -10,8 +10,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(u => u.Id);
 
         // --- Properties ---
-        builder.Property(u => u.FirstName).HasMaxLength(100).IsRequired();
-        builder.Property(u => u.LastName).HasMaxLength(100).IsRequired();
+        builder.Property(u => u.FirstName).HasMaxLength(100).IsRequired(false);
+        builder.Property(u => u.LastName).HasMaxLength(100).IsRequired(false);
         builder.Property(u => u.Username).HasMaxLength(50).IsRequired();
         builder.Property(u => u.PhoneNumber).HasMaxLength(15).IsRequired();
         builder.Property(u => u.Email).HasMaxLength(255).IsRequired(false);

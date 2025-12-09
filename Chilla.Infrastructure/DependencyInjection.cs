@@ -55,6 +55,14 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceRepository, InvoiceRepository>(); // Added Registration
 
         // 2. Dapper & Redis
+        
+        /*
+         * Add Command for redis container in Docker:
+         docker run --name chilla-redis -d \
+          -p 6379:6379 \
+          redis redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+         */
+        
         services.AddScoped<IDbConnection>(sp => new SqlConnection(connectionString));
         
         services.AddStackExchangeRedisCache(options =>
@@ -62,6 +70,9 @@ public static class DependencyInjection
             options.Configuration = configuration.GetConnectionString("Redis");
             options.InstanceName = "Chilla_";
         });
+        
+        // ثبت سرویس کش هوشمند
+        services.AddScoped<ICacheService, CacheService>();
 
         // 3. Background Services (Quartz for Outbox)
         services.AddQuartz(q =>
@@ -73,6 +84,16 @@ public static class DependencyInjection
                 .ForJob(jobKey)
                 .WithIdentity("OutboxProcessJob-Trigger")
                 .WithSimpleSchedule(x => x.WithIntervalInSeconds(5).RepeatForever()));
+            
+            // جاب پاکسازی (Cleanup Job)
+            var cleanupJobKey = new JobKey("OutboxCleanupJob");
+            q.AddJob<OutboxCleanupJob>(opts => opts.WithIdentity(cleanupJobKey));
+            
+            q.AddTrigger(opts => opts
+                .ForJob(cleanupJobKey)
+                .WithIdentity("OutboxCleanupJob-Trigger")
+                // اجرای روزانه با Cron Expression (ساعت 04:00 صبح)
+                .WithCronSchedule("0 0 4 * * ?"));
         });
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
         

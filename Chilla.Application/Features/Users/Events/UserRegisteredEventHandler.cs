@@ -1,4 +1,5 @@
 ﻿using Chilla.Domain.Aggregates.NotificationAggregate;
+using Chilla.Domain.Aggregates.UserAggregate;
 using Chilla.Domain.Aggregates.UserAggregate.Events;
 using Chilla.Infrastructure.Persistence;
 using Chilla.Infrastructure.Services;
@@ -12,17 +13,24 @@ public class UserRegisteredEventHandler : INotificationHandler<UserRegisteredEve
 {
     private readonly AppDbContext _dbContext;
     private readonly ISmsSender _smsSender;
+    private readonly IUserRepository _userRepository;
     // private readonly IEmailSender _emailSender; 
 
-    public UserRegisteredEventHandler(AppDbContext dbContext, ISmsSender smsSender)
+    public UserRegisteredEventHandler(AppDbContext dbContext, ISmsSender smsSender, IUserRepository userRepository)
     {
         _dbContext = dbContext;
         _smsSender = smsSender;
+        _userRepository = userRepository;
     }
 
     public async Task Handle(UserRegisteredEvent notification, CancellationToken cancellationToken)
     {
-        var user = notification.User;
+        var user = await _userRepository.GetByIdAsync(notification.UserId, cancellationToken);
+
+        if (user == null)
+        {
+            return;
+        }
 
         // 1. ارسال پیامک خوش‌آمدگویی
         string message = $"سلام {user.FirstName} عزیز، به چله خوش آمدید!";
@@ -56,7 +64,7 @@ public class UserRegisteredEventHandler : INotificationHandler<UserRegisteredEve
         else log.MarkAsFailed(error ?? "Unknown Error");
 
         _dbContext.NotificationLogs.Add(log);
-        
+
         // 3. ذخیره تغییرات
         // نکته: این SaveChanges مستقل از تراکنش اصلی ثبت کاربر است و در Background Job انجام می‌شود.
         await _dbContext.SaveChangesAsync(cancellationToken);

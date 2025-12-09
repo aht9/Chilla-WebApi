@@ -43,6 +43,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Entity<OutboxMessage>().HasIndex(x => x.ProcessedDate);
 
         // اعمال تمام کانفیگ‌های موجود در اسمبلی (UserConfiguration, PlanConfiguration, ...)
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

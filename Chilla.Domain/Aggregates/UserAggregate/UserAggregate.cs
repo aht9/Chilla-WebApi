@@ -4,8 +4,8 @@ namespace Chilla.Domain.Aggregates.UserAggregate;
 
 public class User : BaseEntity, IAggregateRoot
 {
-    public string FirstName { get; private set; }
-    public string LastName { get; private set; }
+    public string? FirstName { get; private set; }
+    public string? LastName { get; private set; }
     public string Username { get; private set; }
     public string PhoneNumber { get; private set; }
     public string? Email { get; private set; }
@@ -35,7 +35,7 @@ public class User : BaseEntity, IAggregateRoot
         Username = phoneNumber; // موقتاً نام کاربری همان شماره تلفن است
         IsActive = true;
         
-        AddDomainEvent(new UserRegisteredEvent(this));
+        AddDomainEvent(new UserRegisteredEvent(this.Id));
     }
 
     public User(string firstName, string lastName, string username, string phoneNumber, string? email = null)
@@ -51,7 +51,7 @@ public class User : BaseEntity, IAggregateRoot
         PhoneNumber = phoneNumber;
         Email = email;
         IsActive = true;
-        AddDomainEvent(new UserRegisteredEvent(this));
+        AddDomainEvent(new UserRegisteredEvent(this.Id));
     }
 
     // --- Profile Management ---

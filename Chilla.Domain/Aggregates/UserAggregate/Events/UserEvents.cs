@@ -2,7 +2,7 @@
 
 namespace Chilla.Domain.Aggregates.UserAggregate.Events;
 
-public record UserRegisteredEvent(User User) : IDomainEvent
+public record UserRegisteredEvent(Guid UserId) : IDomainEvent
 {
     public DateTime OccurredOn { get; } = DateTime.UtcNow;
 }

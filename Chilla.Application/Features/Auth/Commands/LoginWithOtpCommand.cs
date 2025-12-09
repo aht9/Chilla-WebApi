@@ -1,6 +1,7 @@
 ﻿using Chilla.Application.Features.Auth.DTOs;
 using Chilla.Domain.Aggregates.UserAggregate;
 using Chilla.Domain.Common;
+using Chilla.Domain.Exceptions;
 using Chilla.Infrastructure.Authentication;
 using MediatR;
 
@@ -33,7 +34,7 @@ public class LoginWithOtpHandler : IRequestHandler<LoginWithOtpCommand, AuthResu
         var isValid = await _otpService.ValidateOtpAsync(request.PhoneNumber, request.Code);
         if (!isValid)
         {
-            throw new Exception("کد وارد شده نامعتبر یا منقضی شده است.");
+            throw new OtpValidationException("کد وارد شده نامعتبر یا منقضی شده است.");
         }
 
         // 2. بررسی وجود کاربر

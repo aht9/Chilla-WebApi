@@ -13,5 +13,6 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
         builder.HasIndex("UserId");
         
         builder.HasIndex(r => r.RoleId);
+        builder.Property(t => t.RowVersion).IsRowVersion();
     }
 }
