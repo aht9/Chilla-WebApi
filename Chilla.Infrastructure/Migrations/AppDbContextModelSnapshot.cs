@@ -112,8 +112,10 @@ namespace Chilla.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
                         .IsRequired()
-                        .HasColumnType("varbinary(max)");
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("datetime2");
