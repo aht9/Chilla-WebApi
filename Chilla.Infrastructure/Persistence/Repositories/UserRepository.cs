@@ -28,6 +28,7 @@ public class UserRepository : IUserRepository
     {
         // اینجا شاید نیاز باشد RefreshTokens را هم لود کنیم اگر برای لاگین استفاده می‌شود
         return await _context.Users
+            .TagWith("GetByPhoneNumberAsync")
             .Include(u => u.RefreshTokens) 
             .SingleOrDefaultAsync(u => u.PhoneNumber == phoneNumber, cancellationToken);
     }

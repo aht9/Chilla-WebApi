@@ -6,6 +6,7 @@ using Chilla.Infrastructure.Authentication;
 using Chilla.Infrastructure.Persistence;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Chilla.Application.Features.Auth.Commands;
 
@@ -18,75 +19,91 @@ public class LoginWithOtpHandler : IRequestHandler<LoginWithOtpCommand, AuthResu
     private readonly IJwtTokenGenerator _jwtGenerator;
     private readonly IUnitOfWork _unitOfWork;
     private readonly AppDbContext _dbContext;
+    private readonly ILogger<LoginWithOtpHandler> _logger;
 
     public LoginWithOtpHandler(
         IUserRepository userRepository,
         IOtpService otpService,
         IJwtTokenGenerator jwtGenerator,
-        IUnitOfWork unitOfWork, AppDbContext dbContext)
+        IUnitOfWork unitOfWork,
+        AppDbContext dbContext,
+        ILogger<LoginWithOtpHandler> logger)
     {
         _userRepository = userRepository;
         _otpService = otpService;
         _jwtGenerator = jwtGenerator;
         _unitOfWork = unitOfWork;
         _dbContext = dbContext;
+        _logger = logger;
     }
 
-   public async Task<AuthResult> Handle(LoginWithOtpCommand request, CancellationToken cancellationToken)
-{
-    // اعتبارسنجی اولیه (نیازی به تکرار در حلقه ندارد)
-    var isValid = await _otpService.ValidateOtpAsync(request.PhoneNumber, request.Code);
-    if (!isValid) throw new OtpValidationException("کد نامعتبر است.");
-
-    int maxRetries = 3;
-    int currentRetry = 0;
-
-    while (true)
+    public async Task<AuthResult> Handle(LoginWithOtpCommand request, CancellationToken cancellationToken)
     {
-        try
-        {
-            // 2. بررسی وجود کاربر
-            var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber, cancellationToken);
-            bool isNewUser = false;
+        var isValid = await _otpService.ValidateOtpAsync(request.PhoneNumber, request.Code);
+        if (!isValid) throw new OtpValidationException("کد نامعتبر است.");
 
-            if (user == null)
+        const int MaxRetries = 3;
+        int attempt = 0;
+
+        while (true)
+        {
+            try
             {
-                user = new User(request.PhoneNumber);
-                await _userRepository.AddAsync(user, cancellationToken);
-                isNewUser = true;
+                attempt++;
+                return await ProcessLoginAsync(request, cancellationToken);
             }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                if (attempt >= MaxRetries)
+                {
+                    _logger.LogError(ex, "Concurrency error persisting login for {Phone} after {Retries} attempts.",
+                        request.PhoneNumber, MaxRetries);
+                    throw; 
+                }
 
-            if (!user.IsActive) throw new Exception("حساب کاربری غیرفعال است.");
-
-            // 3. تولید توکن‌ها
-            var accessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, "User");
-            var refreshToken = _jwtGenerator.GenerateRefreshToken();
-
-            // 4. افزودن رفرش توکن
-            user.AddRefreshToken(refreshToken, request.IpAddress);
-
-            // 5. ذخیره تغییرات
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            // 6. موفقیت
-            return new AuthResult(
-                AccessToken: accessToken,
-                RefreshToken: refreshToken,
-                IsProfileCompleted: user.IsProfileCompleted(),
-                Message: isNewUser
-                    ? "ثبت نام اولیه انجام شد."
-                    : "ورود با موفقیت انجام شد."
-            );
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            currentRetry++;
-            if (currentRetry >= maxRetries) throw;
-
-            _dbContext.ChangeTracker.Clear();
-
-            await Task.Delay(50, cancellationToken);
+                _logger.LogWarning("Concurrency conflict for {Phone}. Retrying attempt {Attempt}...",
+                    request.PhoneNumber, attempt);
+            
+                _dbContext.ChangeTracker.Clear();
+                await Task.Delay(Random.Shared.Next(50, 150), cancellationToken);
+            }
         }
     }
-}
+
+    private async Task<AuthResult> ProcessLoginAsync(LoginWithOtpCommand request, CancellationToken cancellationToken)
+    {
+
+        var user = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber, cancellationToken);
+        bool isNewUser = false;
+
+        if (user == null)
+        {
+            user = new User(request.PhoneNumber);
+            await _userRepository.AddAsync(user, cancellationToken);
+            isNewUser = true;
+        }
+
+        if (!user.IsActive) throw new Exception("حساب کاربری غیرفعال است.");
+
+        var accessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, "User");
+        var refreshToken = _jwtGenerator.GenerateRefreshToken();
+
+
+        user.AddRefreshToken(refreshToken, request.IpAddress);
+
+        var newTokenEntity = user.RefreshTokens.FirstOrDefault(t => t.Token == refreshToken);
+        if (newTokenEntity != null)
+        {
+            _dbContext.Entry(newTokenEntity).State = EntityState.Added;
+        }
+        
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return new AuthResult(
+            AccessToken: accessToken,
+            RefreshToken: refreshToken,
+            IsProfileCompleted: user.IsProfileCompleted(),
+            Message: isNewUser ? "ثبت نام اولیه انجام شد." : "ورود با موفقیت انجام شد."
+        );
+    }
 }
