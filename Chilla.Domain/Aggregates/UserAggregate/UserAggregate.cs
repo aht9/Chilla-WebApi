@@ -127,11 +127,6 @@ public class User : BaseEntity, IAggregateRoot
     // --- Token Management ---
     public void AddRefreshToken(string token, string remoteIp, double daysToExpire = 30)
     {
-        // Clean up old/invalid tokens to prevent table bloat
-        var invalidTokens = _refreshTokens
-            .Where(t => !t.IsActive && t.Created.AddDays(daysToExpire + 2) < DateTime.UtcNow).ToList();
-        foreach (var t in invalidTokens) _refreshTokens.Remove(t);
-
         _refreshTokens.Add(new UserRefreshToken(token, DateTime.UtcNow.AddDays(daysToExpire), remoteIp));
     }
 

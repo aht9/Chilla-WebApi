@@ -94,6 +94,16 @@ public static class DependencyInjection
                 .WithIdentity("OutboxCleanupJob-Trigger")
                 // اجرای روزانه با Cron Expression (ساعت 04:00 صبح)
                 .WithCronSchedule("0 0 4 * * ?"));
+            
+            //job پاکسازی توکن های قدیمی
+            var tokenCleanupKey = new JobKey("RefreshTokenCleanupJob");
+            q.AddJob<RefreshTokenCleanupJob>(opts => opts.WithIdentity(tokenCleanupKey));
+
+            q.AddTrigger(opts => opts
+                .ForJob(tokenCleanupKey)
+                .WithIdentity("RefreshTokenCleanupJob-Trigger")
+                // اجرای روزانه در ساعت 03:00 بامداد
+                .WithCronSchedule("0 0 3 * * ?"));
         });
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
         
