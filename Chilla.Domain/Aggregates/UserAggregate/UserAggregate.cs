@@ -30,6 +30,7 @@ public class User : BaseEntity, IAggregateRoot
     // سازنده برای ثبت‌نام سریع با شماره موبایل
     public User(string phoneNumber)
     {
+        Id = Guid.NewGuid();
         if (string.IsNullOrWhiteSpace(phoneNumber)) throw new ArgumentNullException(nameof(phoneNumber));
         PhoneNumber = phoneNumber;
         Username = phoneNumber; // موقتاً نام کاربری همان شماره تلفن است
@@ -45,6 +46,7 @@ public class User : BaseEntity, IAggregateRoot
         if (string.IsNullOrWhiteSpace(username)) throw new ArgumentNullException(nameof(username));
         if (string.IsNullOrWhiteSpace(phoneNumber)) throw new ArgumentNullException(nameof(phoneNumber));
 
+        Id = Guid.NewGuid();
         FirstName = firstName;
         LastName = lastName;
         Username = username;

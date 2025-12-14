@@ -9,11 +9,15 @@ public class Role : BaseEntity, IAggregateRoot
     private readonly List<RolePermission> _permissions = new();
     public IReadOnlyCollection<RolePermission> Permissions => _permissions.AsReadOnly();
 
-    private Role() { }
+    private Role()
+    {
+        Id = Guid.NewGuid();
+    }
 
     public Role(string name, string description)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentNullException(nameof(name));
+        Id = Guid.NewGuid();
         Name = name;
         Description = description;
     }

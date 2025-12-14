@@ -15,7 +15,10 @@ public class Invoice : BaseEntity, IAggregateRoot
     public PaymentStatus Status { get; private set; }
     public DateTime? PaidAt { get; private set; }
 
-    private Invoice() { }
+    private Invoice()
+    {
+        Id = Guid.NewGuid();
+    }
 
     public Invoice(Guid userId, Guid planId, decimal amount, string? description)
     {
@@ -23,6 +26,7 @@ public class Invoice : BaseEntity, IAggregateRoot
         if (planId == Guid.Empty) throw new ArgumentException("PlanId required");
         if (amount < 0) throw new ArgumentException("Amount cannot be negative");
 
+        Id = Guid.NewGuid();
         UserId = userId;
         PlanId = planId;
         Amount = amount;

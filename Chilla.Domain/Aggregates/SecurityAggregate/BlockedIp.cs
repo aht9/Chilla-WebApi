@@ -8,12 +8,16 @@ public class BlockedIp : BaseEntity, IAggregateRoot
     public DateTime? ExpiresAt { get; private set; } // Null means permanent block
     public bool IsActive => (ExpiresAt == null || ExpiresAt > DateTime.UtcNow) && !IsDeleted;
 
-    private BlockedIp() { }
+    private BlockedIp()
+    {
+        Id = Guid.NewGuid();
+    }
 
     public BlockedIp(string ipAddress, string reason, double? durationInMinutes = null)
     {
         if (string.IsNullOrWhiteSpace(ipAddress)) throw new ArgumentNullException(nameof(ipAddress));
         
+        Id = Guid.NewGuid();
         IpAddress = ipAddress;
         Reason = reason;
         BlockedAt = DateTime.UtcNow;

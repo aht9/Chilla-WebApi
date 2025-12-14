@@ -13,13 +13,17 @@ public class UserSubscription : BaseEntity, IAggregateRoot
     private readonly List<DailyProgress> _progress = new();
     public IReadOnlyCollection<DailyProgress> Progress => _progress.AsReadOnly();
 
-    private UserSubscription() { }
+    private UserSubscription()
+    {
+        Id = Guid.NewGuid();
+    }
 
     public UserSubscription(Guid userId, Guid planId)
     {
         if (userId == Guid.Empty) throw new ArgumentException("UserId required");
         if (planId == Guid.Empty) throw new ArgumentException("PlanId required");
 
+        Id = Guid.NewGuid();
         UserId = userId;
         PlanId = planId;
         StartDate = DateTime.UtcNow;

@@ -56,12 +56,7 @@ public static class DependencyInjection
 
         // 2. Dapper & Redis
         
-        /*
-         * Add Command for redis container in Docker:
-         docker run --name chilla-redis -d \
-          -p 6379:6379 \
-          redis redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
-         */
+        
         
         services.AddScoped<IDbConnection>(sp => new SqlConnection(connectionString));
         

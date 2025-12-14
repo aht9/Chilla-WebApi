@@ -11,7 +11,10 @@ public class Plan : BaseEntity, IAggregateRoot
     private readonly List<PlanTemplateItem> _items = new();
     public IReadOnlyCollection<PlanTemplateItem> Items => _items.AsReadOnly();
 
-    private Plan() { }
+    private Plan()
+    {
+        Id = Guid.NewGuid();
+    }
 
     public Plan(string title, string description, decimal price, int durationInDays)
     {
@@ -19,6 +22,7 @@ public class Plan : BaseEntity, IAggregateRoot
         if (durationInDays <= 0) throw new ArgumentException("Duration must be greater than 0");
         if (price < 0) throw new ArgumentException("Price cannot be negative");
 
+        Id = Guid.NewGuid();
         Title = title;
         Description = description;
         Price = price;
