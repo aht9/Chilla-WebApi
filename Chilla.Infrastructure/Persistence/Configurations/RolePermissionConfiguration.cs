@@ -15,5 +15,7 @@ public class RolePermissionConfiguration : IEntityTypeConfiguration<RolePermissi
         builder.Property(p => p.Permission)
             .HasConversion<string>()
             .HasMaxLength(100);
+        
+        builder.Property(x => x.RowVersion).IsRowVersion();
     }
 }

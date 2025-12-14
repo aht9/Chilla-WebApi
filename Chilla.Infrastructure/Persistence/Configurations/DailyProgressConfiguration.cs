@@ -19,7 +19,6 @@ public class DailyProgressConfiguration : IEntityTypeConfiguration<DailyProgress
         builder.Property(dp => dp.IsLateEntry).HasDefaultValue(false);
         builder.Property(dp => dp.LateReason).HasMaxLength(500).IsRequired(false);
         
-        // نکته: نیازی به نوشتن دستی HasQueryFilter نیست،
-        // حلقه موجود در AppDbContext خودکار آن را اعمال می‌کند.
+        builder.Property(x => x.RowVersion).IsRowVersion();
     }
 }

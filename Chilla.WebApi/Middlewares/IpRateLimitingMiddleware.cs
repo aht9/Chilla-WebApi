@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Chilla.WebApi.Middlewares;
 
-public class IpRateLimitingMiddleware : IMiddleware
+public class IpRateLimitingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -22,7 +22,7 @@ public class IpRateLimitingMiddleware : IMiddleware
     }
 
 
-    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
+    public async Task InvokeAsync(HttpContext context)
     {
         var ipAddress = context.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
 

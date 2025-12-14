@@ -18,5 +18,7 @@ public class PlanTemplateItemConfiguration : IEntityTypeConfiguration<PlanTempla
             .HasMaxLength(50);
 
         builder.Property(i => i.ConfigJson).HasColumnType("nvarchar(max)");
+        
+        builder.Property(x => x.RowVersion).IsRowVersion();
     }
 }
