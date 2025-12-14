@@ -1,6 +1,6 @@
-﻿using Chilla.Application.Common.Interfaces;
-using Chilla.Domain.Aggregates.UserAggregate;
+﻿using Chilla.Domain.Aggregates.UserAggregate;
 using Chilla.Domain.Common;
+using Chilla.Infrastructure.Common;
 using MediatR;
 
 namespace Chilla.Application.Features.Auth.Commands;

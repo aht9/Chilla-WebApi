@@ -1,8 +1,8 @@
-﻿using Chilla.Application.Common.Interfaces;
-using Chilla.Application.Features.Auth.DTOs;
+﻿using Chilla.Application.Features.Auth.DTOs;
 using Chilla.Domain.Aggregates.UserAggregate;
 using Chilla.Domain.Common;
 using Chilla.Infrastructure.Authentication;
+using Chilla.Infrastructure.Common;
 using MediatR;
 
 namespace Chilla.Application.Features.Auth.Commands;
@@ -14,7 +14,7 @@ public class LoginWithPasswordHandler : IRequestHandler<LoginWithPasswordCommand
     private readonly IUserRepository _userRepository;
     private readonly IJwtTokenGenerator _jwtGenerator;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IPasswordHasher _passwordHasher; // Injected
+    private readonly IPasswordHasher _passwordHasher;
 
     public LoginWithPasswordHandler(
         IUserRepository userRepository, 

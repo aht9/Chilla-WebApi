@@ -40,8 +40,41 @@ public class LoginWithOtpHandler : IRequestHandler<LoginWithOtpCommand, AuthResu
     public async Task<AuthResult> Handle(LoginWithOtpCommand request, CancellationToken cancellationToken)
     {
         var isValid = await _otpService.ValidateOtpAsync(request.PhoneNumber, request.Code);
-        if (!isValid) throw new OtpValidationException("کد نامعتبر است.");
+        //بررسی سناریو بلاک
+        if (!isValid)
+        {
+            var failCount = await _otpService.IncrementOtpFailureCountAsync(request.PhoneNumber);
+            var userToCheck = await _userRepository.GetByPhoneNumberAsync(request.PhoneNumber, cancellationToken);
 
+            if (userToCheck != null)
+            {
+                // سناریوی ۱: کاربر قبلاً لاک بوده و حالا "فرصت آخر" (OTP) را هم خراب کرده
+                if (userToCheck.IsLockedOut)
+                {
+                    // جریمه سنگین: بلاک ۲۴ ساعته
+                    userToCheck.LockoutUntil(DateTimeOffset.UtcNow.AddHours(24));
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    
+                    _logger.LogWarning("User {Phone} double-blocked for 24h due to failed OTP while locked.", request.PhoneNumber);
+                    throw new Exception("حساب کاربری شما به دلیل تلاش‌های ناموفق مکرر (رمز عبور و پیامک) به مدت ۲۴ ساعت مسدود شد.");
+                }
+
+                // سناریوی ۲: ۳ بار اشتباه در وارد کردن OTP
+                if (failCount >= 3)
+                {
+                    userToCheck.LockoutUntil(DateTimeOffset.UtcNow.AddMinutes(20)); // بلاک ۲۰ دقیقه‌ای
+                    await _otpService.ResetOtpFailureCountAsync(request.PhoneNumber); // ریست شمارنده برای دور بعد
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    
+                    _logger.LogWarning("User {Phone} blocked for 20m due to 3 failed OTP attempts.", request.PhoneNumber);
+                    throw new Exception("حساب شما به دلیل ۳ بار ورود اشتباه کد پیامک، به مدت ۲۰ دقیقه مسدود شد.");
+                }
+            }
+
+            throw new OtpValidationException($"کد نامعتبر است. تعداد تلاش‌های ناموفق: {failCount}");
+        }
+        
+        
         const int MaxRetries = 3;
         int attempt = 0;
 
@@ -79,23 +112,33 @@ public class LoginWithOtpHandler : IRequestHandler<LoginWithOtpCommand, AuthResu
         if (user == null)
         {
             user = new User(request.PhoneNumber);
+            var defaultRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Name == "User", cancellationToken);
+            if (defaultRole != null)
+            {
+                user.AssignRole(defaultRole.Id);
+            }
             await _userRepository.AddAsync(user, cancellationToken);
             isNewUser = true;
+        }
+        else
+        {
+            if (user.IsLockedOut)
+            {
+                user.ResetLoginStats();
+                _logger.LogInformation("User {Phone} unlocked via successful OTP.", request.PhoneNumber);
+            }
+
+            // ریست کردن شمارنده خطاهای OTP در Redis (چون لاگین موفق بود)
+            await _otpService.ResetOtpFailureCountAsync(request.PhoneNumber);
         }
 
         if (!user.IsActive) throw new Exception("حساب کاربری غیرفعال است.");
 
-        var accessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, "User");
+        var userRoleName = user.Roles.Any() ? "User" : "User"; 
+        var accessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, userRoleName);
         var refreshToken = _jwtGenerator.GenerateRefreshToken();
-
-
+        
         user.AddRefreshToken(refreshToken, request.IpAddress);
-
-        var newTokenEntity = user.RefreshTokens.FirstOrDefault(t => t.Token == refreshToken);
-        if (newTokenEntity != null)
-        {
-            _dbContext.Entry(newTokenEntity).State = EntityState.Added;
-        }
         
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 

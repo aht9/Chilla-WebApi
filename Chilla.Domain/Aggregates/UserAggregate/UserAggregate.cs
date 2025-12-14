@@ -115,7 +115,6 @@ public class User : BaseEntity, IAggregateRoot
         {
             LockoutEnd = DateTimeOffset.UtcNow.AddMinutes(20); // Block duration
         }
-
         UpdateAudit();
     }
 
@@ -195,4 +194,13 @@ public class User : BaseEntity, IAggregateRoot
             UpdateAudit();
         }
     }
+    
+    public void LockoutUntil(DateTimeOffset lockoutEnd)
+    {
+        LockoutEnd = lockoutEnd;
+        AccessFailedCount = 0; 
+        UpdateAudit();
+    }
+    
+    
 }

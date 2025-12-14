@@ -1,7 +1,6 @@
 ﻿using System.Security.Cryptography;
-using Chilla.Application.Common.Interfaces;
 
-namespace Chilla.Application.Common;
+namespace Chilla.Infrastructure.Common;
 
 public class PasswordHasher : IPasswordHasher
 {

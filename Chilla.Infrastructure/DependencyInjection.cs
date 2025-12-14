@@ -116,10 +116,12 @@ public static class DependencyInjection
         }
 
         // 5. Auth & Services
+        services.AddScoped<AppDbContextInitialiser>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<ISmsSender, SmsSender>();
         services.AddScoped<IEmailSender, EmailSender>();
+        services.AddScoped<IPasswordHasher, PasswordHasher>();
 
         
         // --- [SECTION FIX]: Authentication Configuration ---

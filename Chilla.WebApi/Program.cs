@@ -1,5 +1,6 @@
 using Chilla.Application.Extensions;
 using Chilla.Infrastructure;
+using Chilla.Infrastructure.Persistence;
 using Chilla.WebApi.Extensions;
 using Chilla.WebApi.Middlewares;
 using Microsoft.OpenApi;
@@ -95,10 +96,18 @@ public class Program
             
             // Configure Pipeline
             app.UseMiddleware<GlobalExceptionHandler>();
+            app.UseMiddleware<IpRateLimitingMiddleware>();
 
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
+                using (var scope = app.Services.CreateScope())
+                {
+                    var initialiser = scope.ServiceProvider.GetRequiredService<AppDbContextInitialiser>();
+                    await initialiser.InitialiseAsync(); // ساخت دیتابیس
+                    await initialiser.SeedAsync();       // پر کردن نقش‌ها و دسترسی‌ها
+                    
+                }
                 await app.ApplyMigrationsAsync();
 
                 app.UseSwagger();
