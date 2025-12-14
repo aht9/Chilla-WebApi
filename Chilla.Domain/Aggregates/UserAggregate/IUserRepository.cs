@@ -9,6 +9,8 @@ public interface IUserRepository
     // متد برای بررسی وجود کاربر بدون واکشی کامل (Performance Optimization)
     Task<bool> ExistsByPhoneNumberAsync(string phoneNumber, CancellationToken cancellationToken = default);
     
+    Task<bool> IsUsernameTakenAsync(string username, CancellationToken cancellationToken = default);
+    
     Task AddAsync(User user, CancellationToken cancellationToken = default);
     
     // در EF Core معمولاً Update نیازی به متد Async ندارد چون State در مموری ترک می‌شود

@@ -1,9 +1,8 @@
-using Chilla.Application.Extensions;
+using Chilla.Application;
 using Chilla.Infrastructure;
 using Chilla.Infrastructure.Persistence;
 using Chilla.WebApi.Extensions;
 using Chilla.WebApi.Middlewares;
-using Microsoft.OpenApi;
 using Microsoft.OpenApi.Models;
 using Serilog;
 
@@ -35,7 +34,8 @@ public class Program
             // لایه Application (شامل MediatR، ولیدیشن‌ها)
             builder.Services.AddApplication(builder.Configuration);
             builder.Services.AddTransient<GlobalExceptionHandler>();
-
+            builder.Services.AddHttpContextAccessor();
+            
             // 3. API Services
             builder.Services.AddControllers();
 

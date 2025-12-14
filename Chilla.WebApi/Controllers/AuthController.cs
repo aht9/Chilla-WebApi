@@ -108,15 +108,10 @@ public class AuthController : ControllerBase
     // 4. تکمیل پروفایل (کاربران جدید)
     // ----------------------------------------------------------------
     [HttpPost("complete-profile")]
-    [Authorize] // اکنون که AccessToken در کوکی است، این اتریبیوت کار می‌کند
+    [Authorize] 
     public async Task<IActionResult> CompleteProfile([FromBody] CompleteProfileRequest request)
     {
-        // در معماری صحیح، UserId را باید از Claims توکن استخراج کنیم نه ورودی کاربر
-        // var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        // اما فعلاً طبق درخواست شما از Body می‌خوانیم:
-
         var command = new CompleteProfileCommand(
-            request.UserId,
             request.FirstName,
             request.LastName,
             request.Username,

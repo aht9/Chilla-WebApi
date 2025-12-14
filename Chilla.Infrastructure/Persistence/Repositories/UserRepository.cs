@@ -10,7 +10,13 @@ public class UserRepository : IUserRepository
     {
         _context = context;
     }
-
+    
+    public async Task<bool> IsUsernameTakenAsync(string username, CancellationToken cancellationToken = default)
+    {
+        return await _context.Users
+            .AnyAsync(u => u.Username == username, cancellationToken);
+    }
+    
     public async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _context.Users
