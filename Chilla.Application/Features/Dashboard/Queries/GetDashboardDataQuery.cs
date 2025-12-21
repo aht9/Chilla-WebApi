@@ -33,7 +33,7 @@ public class GetDashboardDataHandler : IRequestHandler<GetDashboardDataQuery, Da
 
         var response = new DashboardDataDto
         {
-            UserProfile = new UserProfileDto(user.Id, user.FirstName, user.LastName, user.Username, user.PhoneNumber)
+            UserProfile = new UserProfileDto(user.Id, user.FirstName, user.LastName, user.Username, user.Email,user.PhoneNumber)
         };
 
         // 2. سناریوی ۱: پروفایل ناقص

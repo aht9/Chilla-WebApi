@@ -29,6 +29,8 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login-otp")]
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> LoginWithOtp([FromBody] LoginOtpRequest request)
     {
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
@@ -37,21 +39,16 @@ public class AuthController : ControllerBase
         var command = new LoginWithOtpCommand(request.PhoneNumber, request.Code, ipAddress);
         var result = await _mediator.Send(command);
 
-        // ذخیره امن توکن‌ها در کوکی
         SetTokenCookies(result.AccessToken, result.RefreshToken);
 
-        // نکته امنیتی: توکن‌ها را در Body برنمی‌گردانیم تا در LocalStorage ذخیره نشوند
-        return Ok(new
-        {
-            isProfileCompleted = result.IsProfileCompleted,
-            message = result.Message
-        });
+        return Ok(new LoginResponseDto(result.IsProfileCompleted, result.Message ?? "ورود موفق."));
     }
 
     // ----------------------------------------------------------------
     // 2. ورود با رمز عبور (سناریوی جایگزین)
     // ----------------------------------------------------------------
     [HttpPost("login-password")]
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> LoginWithPassword([FromBody] LoginPasswordRequest request)
     {
         var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
@@ -61,22 +58,18 @@ public class AuthController : ControllerBase
 
         SetTokenCookies(result.AccessToken, result.RefreshToken);
 
-        return Ok(new
-        {
-            isProfileCompleted = result.IsProfileCompleted,
-            message = result.Message
-        });
+        return Ok(new LoginResponseDto(result.IsProfileCompleted, result.Message ?? "ورود موفق."));
     }
 
     // ----------------------------------------------------------------
     // 3. تمدید توکن (Refresh Token Rotation)
     // ----------------------------------------------------------------
     [HttpPost("refresh-token")]
+    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> RefreshToken()
     {
         // دریافت رفرش توکن فقط از کوکی HttpOnly
         var refreshToken = Request.Cookies["refreshToken"];
-
         if (string.IsNullOrEmpty(refreshToken))
             return Unauthorized(new { message = "توکن یافت نشد. لطفاً مجدداً وارد شوید." });
 
@@ -90,15 +83,10 @@ public class AuthController : ControllerBase
             // جایگزینی توکن‌های قدیمی با جدید (Rotation)
             SetTokenCookies(result.AccessToken, result.RefreshToken);
 
-            return Ok(new
-            {
-                isProfileCompleted = result.IsProfileCompleted,
-                message = "نشست کاربری تمدید شد."
-            });
+            return Ok(new LoginResponseDto(result.IsProfileCompleted, "تمدید موفقیت‌آمیز."));
         }
         catch (Exception)
         {
-            // اگر تمدید شکست خورد (توکن سوخته/نامعتبر)، کوکی‌ها را پاک می‌کنیم تا کاربر لاگ‌اوت شود
             ForceLogoutCookies();
             return Unauthorized(new { message = "نشست کاربری منقضی شده است." });
         }
@@ -108,7 +96,8 @@ public class AuthController : ControllerBase
     // 4. تکمیل پروفایل (کاربران جدید)
     // ----------------------------------------------------------------
     [HttpPost("complete-profile")]
-    [Authorize] 
+    [Authorize]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public async Task<IActionResult> CompleteProfile([FromBody] CompleteProfileRequest request)
     {
         var command = new CompleteProfileCommand(
@@ -142,6 +131,28 @@ public class AuthController : ControllerBase
         ForceLogoutCookies();
 
         return Ok(new { message = "خروج با موفقیت انجام شد." });
+    }
+    
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var command = new ForgotPasswordCommand(request.PhoneNumber);
+        await _mediator.Send(command);
+        return Ok(new { message = "در صورت وجود حساب کاربری، کد تایید ارسال شد." });
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var command = new ResetPasswordCommand(
+            request.PhoneNumber,
+            request.Code,
+            request.NewPassword,
+            request.ConfirmNewPassword);
+
+        await _mediator.Send(command);
+        
+        return Ok(new { message = "رمز عبور با موفقیت تغییر کرد. لطفاً با رمز جدید وارد شوید." });
     }
 
     // ================================================================

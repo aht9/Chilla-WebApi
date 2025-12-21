@@ -24,8 +24,7 @@ public class RequestOtpHandler : IRequestHandler<RequestOtpCommand, bool>
     public async Task<bool> Handle(RequestOtpCommand request, CancellationToken cancellationToken)
     {
         // تولید و کش کردن کد
-        var code = await _otpService.GenerateAndCacheOtpAsync(request.PhoneNumber,15);
-
+        var code = await _otpService.GenerateAndCacheOtpAsync(request.PhoneNumber, "login", 2);
         // ارسال پیامک
         await _smsSender.SendAsync(request.PhoneNumber, $"کد ورود شما به چله: {code}");
         _logger.LogWarning("code :" + code);

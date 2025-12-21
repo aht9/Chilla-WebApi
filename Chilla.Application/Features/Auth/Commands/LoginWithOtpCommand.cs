@@ -39,7 +39,7 @@ public class LoginWithOtpHandler : IRequestHandler<LoginWithOtpCommand, AuthResu
 
     public async Task<AuthResult> Handle(LoginWithOtpCommand request, CancellationToken cancellationToken)
     {
-        var isValid = await _otpService.ValidateOtpAsync(request.PhoneNumber, request.Code);
+        var isValid = await _otpService.ValidateOtpAsync(request.PhoneNumber, request.Code, "login"); 
         //بررسی سناریو بلاک
         if (!isValid)
         {

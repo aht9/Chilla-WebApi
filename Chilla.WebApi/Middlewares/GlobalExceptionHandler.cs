@@ -50,6 +50,13 @@ public class GlobalExceptionHandler : IMiddleware
                 response.Title = "یافت نشد";
                 response.Detail = exception.Message;
                 break;
+            
+            case InvalidCredentialsException: 
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest; // یا 401 Unauthorized
+                response.Status = (int)HttpStatusCode.BadRequest;
+                response.Title = "خطای ورود";
+                response.Detail = exception.Message;
+                break;
 
             default:
                 // خطای ۵۰۰ برای سایر موارد
