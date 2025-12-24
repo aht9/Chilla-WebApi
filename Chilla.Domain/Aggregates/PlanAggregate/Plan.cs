@@ -1,4 +1,5 @@
 ﻿using Chilla.Domain.Aggregates.NotificationAggregate;
+using Chilla.Domain.Exceptions;
 
 namespace Chilla.Domain.Aggregates.PlanAggregate;
 
@@ -31,25 +32,84 @@ public class Plan : BaseEntity, IAggregateRoot
         DurationInDays = durationInDays;
         IsActive = true;
     }
-
-    public void AddTaskTemplate(int startDay, int endDay, string taskName, TaskType type, string configJson, bool isMandatory, NotificationType notifications)
+    
+    /// <summary>
+    /// متد اصلی برای افزودن آیتم‌ها که هوشمندانه از ورود داده‌های غیربهینه جلوگیری می‌کند.
+    /// </summary>
+    public void ReplaceTemplateItems(List<PlanTemplateItemInputModel> incomingItems)
     {
-        if (endDay > DurationInDays) 
-            throw new ArgumentOutOfRangeException(nameof(endDay), $"End day cannot exceed plan duration ({DurationInDays}).");
+        // 1. پاکسازی لیست قبلی (اگر ویرایش کلی است) یا مدیریت افزودن
+        _items.Clear(); 
+
+        // 2. اعتبارسنجی هوشمند برای جلوگیری از افزونگی
+        ValidateOptimization(incomingItems);
+
+        // 3. افزودن آیتم‌ها
+        foreach (var item in incomingItems)
+        {
+            // اعتبارسنجی بازه روزها نسبت به کل پلن
+            if (item.EndDay > DurationInDays)
+                throw new DomainException($"Task '{item.TaskName}' ends on day {item.EndDay} but plan duration is {DurationInDays}.");
+
+            _items.Add(new PlanTemplateItem(
+                item.StartDay, 
+                item.EndDay, 
+                item.TaskName, 
+                item.Type, 
+                item.ConfigJson, 
+                item.IsMandatory, 
+                item.NotificationType
+            ));
+        }
         
-        // 1. بررسی همپوشانی منطقی یا تکراری بودن (به صورت ساده)
-        // این بخش چک می‌کند که دقیقاً همین تسک قبلاً برای این بازه اد نشده باشد
-        var isDuplicate = _items.Any(i => 
-            i.TaskName == taskName && 
-            i.Type == type &&
-            i.StartDay == startDay && 
-            i.EndDay == endDay);
-
-        if (isDuplicate)
-            throw new InvalidOperationException($"Duplicate task '{taskName}' specifically for days {startDay}-{endDay} already exists.");
-
-        _items.Add(new PlanTemplateItem(startDay, endDay, taskName, type, configJson, isMandatory, notifications));
         UpdateAudit();
+    }
+    
+    /// <summary>
+    /// این متد بررسی می‌کند آیا مدیر به جای استفاده از بازه (Range)، 
+    /// چندین رکورد پشت سر هم برای روزهای متوالی ثبت کرده است یا خیر.
+    /// </summary>
+    private static void ValidateOptimization(List<PlanTemplateItemInputModel> items)
+    {
+        // گروه بندی تسک‌هایی که دقیقاً ماهیت یکسان دارند (نام، کانفیگ، اجبار، نوتیفیکیشن)
+        var similarTasksGroups = items
+            .GroupBy(x => new { 
+                x.TaskName, 
+                x.Type, 
+                x.ConfigJson, // مقایسه رشته جیسون (باید نرمالایز شده باشد)
+                x.IsMandatory, 
+                x.NotificationType 
+            })
+            .ToList();
+
+        foreach (var group in similarTasksGroups)
+        {
+            // مرتب‌سازی بر اساس روز شروع
+            var sortedRanges = group.OrderBy(x => x.StartDay).ToList();
+
+            for (int i = 0; i < sortedRanges.Count - 1; i++)
+            {
+                var current = sortedRanges[i];
+                var next = sortedRanges[i + 1];
+
+                // همپوشانی (Overlap) که کلاً غلط است
+                if (current.EndDay >= next.StartDay)
+                {
+                    throw new DomainException(
+                        $"Optimization Error: Task '{current.TaskName}' has overlapping days ranges ({current.StartDay}-{current.EndDay}) and ({next.StartDay}-{next.EndDay}).");
+                }
+
+                // تشخیص عدم بهینگی: پایان این تسک دقیقاً متصل به شروع تسک بعدی است
+                // مثال: تسک A (روز ۱ تا ۵) و تسک A (روز ۶ تا ۱۰)
+                // این دو باید یکی شوند: تسک A (روز ۱ تا ۱۰)
+                if (current.EndDay + 1 == next.StartDay)
+                {
+                    throw new DomainException(
+                        $"Optimization Alert: You have defined '{current.TaskName}' specifically for days {current.StartDay}-{current.EndDay} and then again for {next.StartDay}-{next.EndDay}. " +
+                        $"Since the settings are identical, please MERGE them into a single row: Day {current.StartDay} to {next.EndDay}. This keeps the plan optimized.");
+                }
+            }
+        }
     }
     
     public static void ValidateForRedundancy(List<PlanTemplateItemInputModel> incomingItems)
@@ -61,7 +121,7 @@ public class Plan : BaseEntity, IAggregateRoot
 
         foreach (var group in grouped)
         {
-            // مرتب سازی روزها
+            // مرتب‌سازی روزها
             var sortedDays = group.OrderBy(x => x.StartDay).ToList();
             
             for (int i = 0; i < sortedDays.Count - 1; i++)

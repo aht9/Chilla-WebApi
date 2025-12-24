@@ -2,6 +2,7 @@
 using Chilla.Domain.Aggregates.PlanAggregate;
 using Chilla.Domain.Aggregates.SubscriptionAggregate;
 using Chilla.Domain.Common;
+using Chilla.Domain.Exceptions;
 using MediatR;
 
 namespace Chilla.Application.Features.Subscriptions.Commands;

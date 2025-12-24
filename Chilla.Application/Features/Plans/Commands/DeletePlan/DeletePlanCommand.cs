@@ -1,6 +1,7 @@
 ﻿using Chilla.Domain.Aggregates.PlanAggregate;
 using Chilla.Domain.Aggregates.SubscriptionAggregate;
 using Chilla.Domain.Common;
+using Chilla.Domain.Exceptions;
 using Chilla.Domain.Specifications.SubscriptionSpecs;
 using FluentValidation;
 using MediatR;

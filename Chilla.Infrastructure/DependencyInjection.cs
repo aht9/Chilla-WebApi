@@ -101,19 +101,6 @@ public static class DependencyInjection
                 .WithCronSchedule("0 0 3 * * ?"));
         });
         services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
-        
-        // 4. MediatR
-        var applicationAssembly = AppDomain.CurrentDomain.GetAssemblies()
-            .FirstOrDefault(a => a.GetName().Name == "Chilla.Application");
-
-        if (applicationAssembly != null)
-        {
-            services.AddMediatR(cfg => 
-            {
-                cfg.RegisterServicesFromAssembly(applicationAssembly);
-                cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
-            });
-        }
 
         // 5. Auth & Services
         services.AddScoped<AppDbContextInitialiser>();

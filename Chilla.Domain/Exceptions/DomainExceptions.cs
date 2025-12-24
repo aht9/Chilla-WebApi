@@ -1,6 +1,12 @@
 ﻿namespace Chilla.Domain.Exceptions;
 
-public class SubscriptionDomainException : Exception
+public class DomainException : Exception
+{
+    public DomainException(string message) : base(message) { }
+}
+
+// 2. ارث‌بری سایر خطاها از کلاس پایه (Best Practice)
+public class SubscriptionDomainException : DomainException
 {
     public SubscriptionDomainException(string message) : base(message) { }
 }

@@ -1,5 +1,6 @@
 ﻿using Chilla.Domain.Aggregates.PlanAggregate;
 using Chilla.Domain.Common;
+using Chilla.Domain.Exceptions;
 using MediatR;
 
 namespace Chilla.Application.Features.Plans.Commands.UpdatePlan;

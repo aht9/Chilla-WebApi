@@ -1,4 +1,5 @@
 ﻿using Chilla.Domain.Aggregates.PlanAggregate;
+using Chilla.Domain.Common;
 
 namespace Chilla.Infrastructure.Persistence.Repositories;
 
@@ -40,5 +41,21 @@ public class PlanRepository : IPlanRepository
     public void Delete(Plan plan)
     {
         _context.Plans.Update(plan);
+    }
+    
+    public async Task<List<Plan>> ListAsync(ISpecification<Plan> spec, CancellationToken cancellationToken)
+    {
+        var queryable = _context.Plans.AsQueryable();
+        // استفاده از SpecificationEvaluator که در پروژه دارید
+        var query = SpecificationEvaluator.GetQuery(queryable, spec);
+        return await query.ToListAsync(cancellationToken);
+    }
+
+    public async Task<Plan> FirstOrDefaultAsync(ISpecification<Plan> spec, CancellationToken cancellationToken)
+    {
+        var queryable = _context.Plans.AsQueryable();
+        var query = SpecificationEvaluator.GetQuery(queryable, spec);
+        return await query.FirstOrDefaultAsync(cancellationToken);
+
     }
 }

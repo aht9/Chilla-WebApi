@@ -1,4 +1,6 @@
-﻿namespace Chilla.Domain.Aggregates.PlanAggregate;
+﻿using Chilla.Domain.Specifications.PlanSpecs;
+
+namespace Chilla.Domain.Aggregates.PlanAggregate;
 
 public interface IPlanRepository
 {
@@ -10,4 +12,8 @@ public interface IPlanRepository
     Task AddAsync(Plan plan, CancellationToken cancellationToken = default);
     void Update(Plan plan);
     void Delete(Plan plan);
+    
+    Task<List<Plan>> ListAsync(ISpecification<Plan> spec, CancellationToken cancellationToken);
+
+    Task<Plan> FirstOrDefaultAsync(ISpecification<Plan> spec, CancellationToken cancellationToken);
 }

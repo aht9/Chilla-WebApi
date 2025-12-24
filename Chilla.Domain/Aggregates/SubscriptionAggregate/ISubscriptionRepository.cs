@@ -12,4 +12,7 @@ public interface ISubscriptionRepository
     
     Task AddAsync(UserSubscription subscription, CancellationToken cancellationToken = default);
     void Update(UserSubscription subscription);
+    
+    Task<int> CountAsync(ISpecification<UserSubscription> spec, CancellationToken cancellationToken);
+
 }

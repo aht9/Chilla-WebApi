@@ -18,17 +18,21 @@ public class GetActivePlansQueryHandler : IRequestHandler<GetActivePlansQuery, L
 
     public async Task<List<PlanDto>> Handle(GetActivePlansQuery request, CancellationToken cancellationToken)
     {
-        // فرض بر این است که متد GetListAsync یا مشابه در ریپوزیتوری وجود دارد
-        // اگر از Specification استفاده می‌کنید:
-        var plans = await _planRepository.ListAsync(new ActivePlansSpec(), cancellationToken);
+        // 1. استفاده از Spec اصلاح شده در مرحله اول (true برای لود کردن آیتم‌ها)
+        var spec = new ActivePlansSpec(includeDetails: true);
+        var plans = await _planRepository.ListAsync(spec, cancellationToken);
 
+        // 2. اصلاح ترتیب پارامترها و مپ کردن صحیح آیتم‌ها
         return plans.Select(p => new PlanDto(
-            p.Id,
-            p.Title,
-            p.Description,
-            p.Price,
-            p.DurationInDays,
-            p.Items.Count
+            p.Id,                                       // 1. Id
+            p.Title,                                    // 2. Title
+            p.Price,                                    // 3. Price (decimal) - جایش اصلاح شد
+            p.DurationInDays,                           // 4. Duration
+            p.Description,                              // 5. Description (string?) - جایش اصلاح شد
+            p.Items.Select(i => new PlanItemDto(        // 6. Items (List<PlanItemDto>)
+                i.TaskName, 
+                i.IsMandatory
+            )).ToList()
         )).ToList();
     }
 }

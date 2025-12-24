@@ -1,4 +1,5 @@
-﻿using Chilla.Domain.Aggregates.NotificationAggregate;
+﻿using System.Text.Json;
+using Chilla.Domain.Aggregates.NotificationAggregate;
 using Chilla.Domain.Aggregates.PlanAggregate;
 using Chilla.Domain.Common;
 using MediatR;
@@ -18,37 +19,20 @@ public class CreatePlanCommandHandler : IRequestHandler<CreatePlanCommand, Guid>
 
     public async Task<Guid> Handle(CreatePlanCommand request, CancellationToken cancellationToken)
     {
-        // 1. تبدیل DTO به مدل ورودی دامین برای بررسی افزونگی
-        var domainInputs = request.Items.Select(x => new PlanTemplateItemInputModel(
-            x.StartDay,
-            x.EndDay,
-            x.TaskName,
-            x.Type,
-            x.ConfigJson,
-            x.IsMandatory,
-            ParseNotifications(x.Notifications)
+        var plan = new Plan(request.Title, request.Description, request.Price, request.DurationInDays);
+
+        var domainItems = request.Items.Select(i => new PlanTemplateItemInputModel(
+            i.StartDay,
+            i.EndDay,
+            i.TaskName,
+            i.Type,
+            JsonSerializer.Serialize(i.ScheduleConfig), // تبدیل کانفیگ به JSON برای ذخیره
+            i.IsMandatory,
+            i.NotificationType
         )).ToList();
 
         // 2. اجرای بیزنس لاجیک هوشمند (جلوگیری از تکرار و داده اضافی)
-        Plan.ValidateForRedundancy(domainInputs);
-
-        // 3. ساخت Aggregate Root
-        var plan = new Plan(request.Title, request.Description, request.Price, request.DurationInDays);
-
-        // 4. افزودن آیتم‌ها (حالا که مطمئنیم بهینه هستند)
-        foreach (var item in domainInputs)
-        {
-            plan.AddTaskTemplate(
-                item.StartDay,
-                item.EndDay,
-                item.TaskName,
-                item.Type,
-                item.ConfigJson,
-                item.IsMandatory,
-                item.NotificationType
-            );
-        }
-
+        plan.ReplaceTemplateItems(domainItems);
         // 5. ذخیره
         await _planRepository.AddAsync(plan, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);

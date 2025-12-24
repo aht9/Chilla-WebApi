@@ -1,6 +1,7 @@
 ﻿using Chilla.Application.Features.Plans.Commands.CreatePlan;
 using Chilla.Application.Features.Plans.Commands.DeletePlan;
 using Chilla.Application.Features.Plans.Commands.UpdatePlan;
+using Chilla.Application.Features.Plans.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -42,9 +43,10 @@ public class AdminPlansController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    public IActionResult GetPlanById(Guid id)
+    public async Task<IActionResult> GetPlanById(Guid id)
     {
-        // TODO: Implement GetPlanByIdQuery for Admin (shows even inactive plans)
-        return Ok(); 
+        var query = new GetAdminPlanByIdQuery(id);
+        var result = await _mediator.Send(query);
+        return Ok(result);
     }
 }
