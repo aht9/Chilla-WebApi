@@ -1,9 +1,12 @@
 ﻿namespace Chilla.Domain.Aggregates.NotificationAggregate;
 
+[Flags] 
 public enum NotificationType
 {
-    Sms = 1,
-    Email = 2,
-    Push = 3,
-    InApp = 4
+    None = 0,
+    Site = 1,
+    Sms = 2,
+    Email = 4,
+    Call = 8,
+    Push = 16      // 10000 (برای موبایل)
 }

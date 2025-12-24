@@ -1,0 +1,10 @@
+﻿{
+  "timing": {
+    "type": "ReligiousTime", // یا "FixedTime"
+    "reference": "Fajr",     // مرجع: Fajr, Sunrise, Noon, Sunset, Maghrib
+    "offset": "-01:00",      // آفست: منفی یعنی قبل، مثبت یعنی بعد
+    "windowDuration": "01:00" // چقدر وقت دارد؟ (از ۱ ساعت قبل اذان تا خود اذان)
+  },
+  "targetCount": 100, // برای ذکر شمار
+  "text": "Subhan Allah"
+}

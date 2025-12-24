@@ -1,4 +1,6 @@
-﻿namespace Chilla.Domain.Aggregates.PlanAggregate;
+﻿using Chilla.Domain.Aggregates.NotificationAggregate;
+
+namespace Chilla.Domain.Aggregates.PlanAggregate;
 
 public class Plan : BaseEntity, IAggregateRoot
 {
@@ -30,20 +32,56 @@ public class Plan : BaseEntity, IAggregateRoot
         IsActive = true;
     }
 
-    public void AddTaskTemplate(int dayNumber, string taskName, TaskType type, string configJson, bool isMandatory)
+    public void AddTaskTemplate(int startDay, int endDay, string taskName, TaskType type, string configJson, bool isMandatory, NotificationType notifications)
     {
-        if (dayNumber < 1 || dayNumber > DurationInDays) 
-            throw new ArgumentOutOfRangeException(nameof(dayNumber), $"Day number must be between 1 and {DurationInDays}");
+        if (endDay > DurationInDays) 
+            throw new ArgumentOutOfRangeException(nameof(endDay), $"End day cannot exceed plan duration ({DurationInDays}).");
         
-        if (string.IsNullOrWhiteSpace(taskName))
-            throw new ArgumentNullException(nameof(taskName));
+        // 1. بررسی همپوشانی منطقی یا تکراری بودن (به صورت ساده)
+        // این بخش چک می‌کند که دقیقاً همین تسک قبلاً برای این بازه اد نشده باشد
+        var isDuplicate = _items.Any(i => 
+            i.TaskName == taskName && 
+            i.Type == type &&
+            i.StartDay == startDay && 
+            i.EndDay == endDay);
 
-        // Note: In a real scenario, we might want to validate 'configJson' schema here based on 'type'
-        
-        _items.Add(new PlanTemplateItem(dayNumber, taskName, type, configJson, isMandatory));
+        if (isDuplicate)
+            throw new InvalidOperationException($"Duplicate task '{taskName}' specifically for days {startDay}-{endDay} already exists.");
+
+        _items.Add(new PlanTemplateItem(startDay, endDay, taskName, type, configJson, isMandatory, notifications));
         UpdateAudit();
     }
+    
+    public static void ValidateForRedundancy(List<PlanTemplateItemDto> incomingItems)
+    {
+        // گروه بندی آیتم ها بر اساس شباهت کامل محتوا (به جز روز)
+        var grouped = incomingItems
+            .GroupBy(x => new { x.TaskName, x.Type, x.ConfigJson, x.IsMandatory, x.NotificationType })
+            .ToList();
 
+        foreach (var group in grouped)
+        {
+            // مرتب سازی روزها
+            var sortedDays = group.OrderBy(x => x.StartDay).ToList();
+            
+            for (int i = 0; i < sortedDays.Count - 1; i++)
+            {
+                var current = sortedDays[i];
+                var next = sortedDays[i + 1];
+
+                // اگر تسک فعلی تمام شد و بلافاصله تسک بعدی (که دقیقا مشابه است) شروع شد
+                // یعنی مدیر به جای Range، دو تا ردیف جدا زده است.
+                // مثال: آیتم ۱ (روز ۱ تا ۱) - آیتم ۲ (روز ۲ تا ۲) -> باید ادغام شوند
+                if (current.EndDay + 1 == next.StartDay)
+                {
+                    throw new InvalidOperationException(
+                        $"Optimization Warning: The task '{current.TaskName}' is repeated on consecutive days ({current.EndDay} and {next.StartDay}). " +
+                        $"Please use a single task with a Day Range (StartDay to EndDay) instead of multiple rows to save data.");
+                }
+            }
+        }
+    }
+    
     public void Deactivate()
     {
         IsActive = false;
@@ -56,3 +94,5 @@ public class Plan : BaseEntity, IAggregateRoot
         UpdateAudit();
     }
 }
+
+public record PlanTemplateItemDto(int StartDay, int EndDay, string TaskName, TaskType Type, string ConfigJson, bool IsMandatory, NotificationType NotificationType);
