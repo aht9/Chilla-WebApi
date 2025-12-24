@@ -24,4 +24,12 @@
       <ProjectReference Include="..\Chilla.Application\Chilla.Application.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Folder Include="logs\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="logs\log-20251221.txt" />
+    </ItemGroup>
+
 </Project>

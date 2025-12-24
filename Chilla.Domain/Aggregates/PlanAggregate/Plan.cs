@@ -52,7 +52,7 @@ public class Plan : BaseEntity, IAggregateRoot
         UpdateAudit();
     }
     
-    public static void ValidateForRedundancy(List<PlanTemplateItemDto> incomingItems)
+    public static void ValidateForRedundancy(List<PlanTemplateItemInputModel> incomingItems)
     {
         // گروه بندی آیتم ها بر اساس شباهت کامل محتوا (به جز روز)
         var grouped = incomingItems
@@ -95,4 +95,4 @@ public class Plan : BaseEntity, IAggregateRoot
     }
 }
 
-public record PlanTemplateItemDto(int StartDay, int EndDay, string TaskName, TaskType Type, string ConfigJson, bool IsMandatory, NotificationType NotificationType);
+public record PlanTemplateItemInputModel(int StartDay, int EndDay, string TaskName, TaskType Type, string ConfigJson, bool IsMandatory, NotificationType NotificationType);
