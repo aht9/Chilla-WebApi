@@ -10,6 +10,7 @@ using Chilla.Infrastructure.Common;
 using Chilla.Infrastructure.Persistence;
 using Chilla.Infrastructure.Persistence.Interceptors;
 using Chilla.Infrastructure.Persistence.Repositories;
+using Chilla.Infrastructure.Persistence.Services;
 using Chilla.Infrastructure.Services;
 using MediatR;
 using Microsoft.Data.SqlClient;
@@ -53,6 +54,7 @@ public static class DependencyInjection
 
         // 2. Dapper & Redis
         services.AddScoped<IDbConnection>(sp => new SqlConnection(connectionString));
+        services.AddTransient<IDapperService, DapperService>();
         
         services.AddStackExchangeRedisCache(options =>
         {

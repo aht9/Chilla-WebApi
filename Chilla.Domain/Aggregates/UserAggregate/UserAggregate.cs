@@ -174,4 +174,14 @@ public class User : BaseEntity, IAggregateRoot
             UpdateAudit();
         }
     }
+    
+    // متد لاگین موفق (به‌روزرسانی آمار)
+    public void RecordLoginSuccess(string ipAddress, string refreshToken, double refreshTokenExpiryDays = 30)
+    {
+        AccessFailedCount = 0;
+        LockoutEnd = null;
+        AddRefreshToken(refreshToken, ipAddress, refreshTokenExpiryDays);
+        // اینجا ایونت لاگین هم می‌توان منتشر کرد
+        UpdateAudit();
+    }
 }
