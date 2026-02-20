@@ -5,5 +5,8 @@ public record PlanDto(
     string Title, 
     decimal Price, 
     int DurationDays,
-    string? Description
+    string? Description,
+    List<PlanItemDto> Items 
 );
+
+public record PlanItemDto(string TaskName, bool IsMandatory);

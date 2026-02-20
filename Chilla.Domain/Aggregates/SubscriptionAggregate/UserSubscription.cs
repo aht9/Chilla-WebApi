@@ -1,6 +1,6 @@
 ﻿namespace Chilla.Domain.Aggregates.SubscriptionAggregate;
 
-public enum SubscriptionStatus { Active, Completed, Failed, Canceled }
+public enum SubscriptionStatus { Active, Completed, Failed, Canceled, PendingPayment }
 
 public class UserSubscription : BaseEntity, IAggregateRoot
 {
@@ -13,20 +13,47 @@ public class UserSubscription : BaseEntity, IAggregateRoot
     private readonly List<DailyProgress> _progress = new();
     public IReadOnlyCollection<DailyProgress> Progress => _progress.AsReadOnly();
 
-    private UserSubscription() { }
+    private UserSubscription()
+    {
+        Id = Guid.NewGuid();
+    }
 
     public UserSubscription(Guid userId, Guid planId)
     {
         if (userId == Guid.Empty) throw new ArgumentException("UserId required");
         if (planId == Guid.Empty) throw new ArgumentException("PlanId required");
 
+        Id = Guid.NewGuid();
         UserId = userId;
         PlanId = planId;
         StartDate = DateTime.UtcNow;
         Status = SubscriptionStatus.Active;
     }
 
-    // متد استاندارد برای انجام کار (بدون تأخیر)
+    public UserSubscription(Guid userId, Guid planId, DateTime startDate, DateTime endDate, bool requiresPayment)
+    {
+        if (userId == Guid.Empty) throw new ArgumentException("UserId required");
+        if (planId == Guid.Empty) throw new ArgumentException("PlanId required");
+        if (endDate < startDate) throw new ArgumentException("EndDate cannot be before StartDate");
+
+        Id = Guid.NewGuid();
+        UserId = userId;
+        PlanId = planId;
+        StartDate = startDate;
+        EndDate = endDate;
+        
+        Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
+    }
+
+    public void Activate()
+    {
+        if (Status == SubscriptionStatus.PendingPayment)
+        {
+            Status = SubscriptionStatus.Active;
+            UpdateAudit();
+        }
+    }
+
     public void MarkTaskAsComplete(Guid planTemplateItemId, int valueEntered = 0)
     {
         if (Status != SubscriptionStatus.Active) 
@@ -34,28 +61,20 @@ public class UserSubscription : BaseEntity, IAggregateRoot
 
         var today = DateTime.UtcNow.Date;
         
-        // Fix 1: 'Date' property is renamed to 'ScheduledDate'
         var existing = _progress.SingleOrDefault(p => p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
 
         if (existing != null)
         {
-            // Fix 2: UpdateValue now requires 3 arguments. 
-            // Since this is normal completion, isLateEntry = false, lateReason = null.
             existing.UpdateValue(valueEntered, false, null);
         }
         else
         {
-            // Fix 3: Constructor signature changed. 
-            // Old: (itemId, date, isCompleted(bool), value(int))
-            // New: (itemId, scheduledDate, value(int), isLate(bool), reason(string))
-            // We pass valueEntered. isLate defaults to false.
             _progress.Add(new DailyProgress(planTemplateItemId, today, valueEntered));
         }
         
         UpdateAudit();
     }
     
-    // متد جدید برای ثبت با تأخیر (طبق سناریوی شما)
     public void MarkTaskAsCompleteWithCommitment(Guid planTemplateItemId, int valueEntered, string commitmentReason)
     {
         if (Status != SubscriptionStatus.Active) 

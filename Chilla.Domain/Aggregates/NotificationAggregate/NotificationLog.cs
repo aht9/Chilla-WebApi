@@ -11,7 +11,10 @@ public class NotificationLog : BaseEntity, IAggregateRoot
     public string? ErrorMessage { get; private set; }
     public int RetryCount { get; private set; }
 
-    private NotificationLog() { }
+    private NotificationLog()
+    {
+        Id = Guid.NewGuid();
+    }
 
     public NotificationLog(Guid userId, NotificationType type, string content, string target)
     {
@@ -19,6 +22,7 @@ public class NotificationLog : BaseEntity, IAggregateRoot
         if (string.IsNullOrWhiteSpace(content)) throw new ArgumentException("Content cannot be empty.", nameof(content));
         if (string.IsNullOrWhiteSpace(target)) throw new ArgumentException("Target cannot be empty.", nameof(target));
 
+        Id = Guid.NewGuid();
         UserId = userId;
         Type = type;
         Content = content;

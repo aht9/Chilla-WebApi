@@ -1,4 +1,5 @@
 ﻿using Chilla.Domain.Aggregates.SubscriptionAggregate;
+using Chilla.Domain.Common;
 
 namespace Chilla.Infrastructure.Persistence.Repositories;
 
@@ -44,5 +45,12 @@ public class SubscriptionRepository : ISubscriptionRepository
     public void Update(UserSubscription subscription)
     {
         _context.UserSubscriptions.Update(subscription);
+    }
+    
+    public async Task<int> CountAsync(ISpecification<UserSubscription> spec, CancellationToken cancellationToken)
+    {
+        var queryable = _context.UserSubscriptions.AsQueryable();
+        var query = SpecificationEvaluator.GetQuery(queryable, spec);
+        return await query.CountAsync(cancellationToken);
     }
 }

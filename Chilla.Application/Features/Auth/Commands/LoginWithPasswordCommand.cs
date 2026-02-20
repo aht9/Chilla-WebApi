@@ -1,8 +1,9 @@
-﻿using Chilla.Application.Common.Interfaces;
-using Chilla.Application.Features.Auth.DTOs;
+﻿using Chilla.Application.Features.Auth.DTOs;
 using Chilla.Domain.Aggregates.UserAggregate;
 using Chilla.Domain.Common;
+using Chilla.Domain.Exceptions;
 using Chilla.Infrastructure.Authentication;
+using Chilla.Infrastructure.Common;
 using MediatR;
 
 namespace Chilla.Application.Features.Auth.Commands;
@@ -14,11 +15,11 @@ public class LoginWithPasswordHandler : IRequestHandler<LoginWithPasswordCommand
     private readonly IUserRepository _userRepository;
     private readonly IJwtTokenGenerator _jwtGenerator;
     private readonly IUnitOfWork _unitOfWork;
-    private readonly IPasswordHasher _passwordHasher; // Injected
+    private readonly IPasswordHasher _passwordHasher;
 
     public LoginWithPasswordHandler(
-        IUserRepository userRepository, 
-        IJwtTokenGenerator jwtGenerator, 
+        IUserRepository userRepository,
+        IJwtTokenGenerator jwtGenerator,
         IUnitOfWork unitOfWork,
         IPasswordHasher passwordHasher)
     {
@@ -32,21 +33,20 @@ public class LoginWithPasswordHandler : IRequestHandler<LoginWithPasswordCommand
     {
         var user = await _userRepository.GetByUsernameAsync(request.Username, cancellationToken);
 
-        if (user == null || user.PasswordHash == null) 
+        if (user == null || user.PasswordHash == null)
             throw new Exception("نام کاربری یا کلمه عبور اشتباه است.");
 
-        // Fixed: Use PasswordHasher service
         bool isPasswordValid = _passwordHasher.VerifyPassword(request.Password, user.PasswordHash);
-        
+
         if (!isPasswordValid)
         {
             user.RecordLoginFailure();
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            throw new Exception("نام کاربری یا کلمه عبور اشتباه است.");
+            throw new InvalidCredentialsException("نام کاربری یا کلمه عبور اشتباه است.");
         }
 
-        if (user.IsLockedOut) throw new Exception($"حساب کاربری تا {user.LockoutEnd} مسدود است.");
-        if (!user.IsActive) throw new Exception("حساب کاربری غیرفعال است.");
+        if (user.IsLockedOut) throw new InvalidCredentialsException($"حساب کاربری تا {user.LockoutEnd} مسدود است.");
+        if (!user.IsActive) throw new InvalidCredentialsException("حساب کاربری غیرفعال است.");
 
         user.ResetLoginStats();
 

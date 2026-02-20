@@ -10,6 +10,8 @@ public class BlockedIpConfiguration : IEntityTypeConfiguration<BlockedIp>
         
         builder.Property(b => b.IpAddress).HasMaxLength(45).IsRequired(); // IPv6 support
         builder.HasIndex(b => b.IpAddress);
+        
+        builder.Property(x => x.RowVersion).IsRowVersion();
     }
 }
 
@@ -26,5 +28,6 @@ public class RequestLogConfiguration : IEntityTypeConfiguration<RequestLog>
         
         // TTL Indexing logic requires specific DB features, here generic index:
         builder.HasIndex(r => r.OccurredOn); 
+        builder.Property(x => x.RowVersion).IsRowVersion();
     }
 }

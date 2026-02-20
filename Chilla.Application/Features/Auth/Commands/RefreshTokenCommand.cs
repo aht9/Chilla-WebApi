@@ -1,4 +1,4 @@
-﻿using Chilla.Application.Features.Auth.DTOs;
+using Chilla.Application.Features.Auth.DTOs;
 using Chilla.Domain.Common;
 using Chilla.Infrastructure.Authentication;
 using Chilla.Infrastructure.Persistence;
@@ -11,7 +11,7 @@ public record RefreshTokenCommand(string RefreshToken, string IpAddress) : IRequ
 
 public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, AuthResult>
 {
-    private readonly AppDbContext _context;
+    private readonly AppDbContext _context; // Direct access specifically for complex Auth query
     private readonly IJwtTokenGenerator _jwtGenerator;
     private readonly IUnitOfWork _unitOfWork;
 
@@ -24,8 +24,7 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, AuthResu
 
     public async Task<AuthResult> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
     {
-        // 1. جستجوی کاربر بر اساس توکن (بهینه شده)
-        // ما نیاز داریم توکن‌ها را هم لود کنیم تا بتوانیم چک کنیم
+        // 1. جستجوی کاربر به همراه توکن‌ها
         var user = await _context.Users
             .Include(u => u.RefreshTokens)
             .SingleOrDefaultAsync(u => u.RefreshTokens.Any(t => t.Token == request.RefreshToken), cancellationToken);
@@ -35,26 +34,30 @@ public class RefreshTokenHandler : IRequestHandler<RefreshTokenCommand, AuthResu
 
         var existingToken = user.RefreshTokens.Single(t => t.Token == request.RefreshToken);
 
-        // 2. اعتبارسنجی توکن
-        if (!existingToken.IsActive)
+        // 2. تشخیص استفاده مجدد (Reuse Detection) - امنیت سطح بالا
+        if (existingToken.IsRevoked)
         {
-            // امنیتی: اگر کسی سعی کرد از توکن سوخته استفاده کند، شاید دزدی توکن رخ داده!
-            // در سناریوهای خیلی حساس، همه توکن‌های کاربر را باطل می‌کنند.
-            throw new UnauthorizedAccessException("توکن منقضی یا باطل شده است.");
+            // کسی دارد از توکن سوخته استفاده می‌کند! احتمالاً توکن دزدیده شده است.
+            // اقدام امنیتی: همه توکن‌های این کاربر را باطل کن تا مجبور شود دوباره لاگین کند.
+            user.RevokeAllRefreshTokens(request.IpAddress, "Security Alert: Reused Revoked Token");
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            
+            throw new UnauthorizedAccessException("هشدار امنیتی: تلاش برای استفاده از توکن نامعتبر.");
         }
 
-        // 3. چرخش توکن (Token Rotation) - امنیت بالا
-        // توکن قبلی را باطل می‌کنیم
-        user.RevokeRefreshToken(request.RefreshToken, request.IpAddress, "Replaced by new token");
+        if (existingToken.IsExpired)
+            throw new UnauthorizedAccessException("توکن منقضی شده است. لطفاً مجدداً وارد شوید.");
 
-        // توکن جدید صادر می‌کنیم
-        var newAccessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, "User");
+        // 3. چرخش توکن (Rotation)
+        // توکن فعلی را باطل می‌کنیم و لینک می‌دهیم به توکن جدید
         var newRefreshToken = _jwtGenerator.GenerateRefreshToken();
+        var newAccessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, "User");
 
-        user.AddRefreshToken(newRefreshToken, request.IpAddress);
-
+        // متد RevokeRefreshToken باید در Domain آپدیت شود تا ReplacedByToken را پشتیبانی کند
+        user.RotateRefreshToken(existingToken, newRefreshToken, request.IpAddress);
+        
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return new AuthResult(newAccessToken, newRefreshToken, user.IsProfileCompleted(), "توکن تمدید شد.");
+        return new AuthResult(newAccessToken, newRefreshToken, user.IsProfileCompleted(), "تمدید موفقیت‌آمیز.");
     }
 }

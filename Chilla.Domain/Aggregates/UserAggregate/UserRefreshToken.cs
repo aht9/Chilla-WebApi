@@ -25,10 +25,11 @@ public class UserRefreshToken : BaseEntity
         Created = DateTime.UtcNow;
     }
 
-    public void Revoke(string ipAddress, string reason)
+    public void Revoke(string ipAddress, string reason, string? replacedByToken = null)
     {
         Revoked = DateTime.UtcNow;
         RevokedByIp = ipAddress;
         ReasonRevoked = reason;
+        ReplacedByToken = replacedByToken;
     }
 }

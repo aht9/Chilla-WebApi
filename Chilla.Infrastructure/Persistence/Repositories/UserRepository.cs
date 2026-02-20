@@ -10,7 +10,13 @@ public class UserRepository : IUserRepository
     {
         _context = context;
     }
-
+    
+    public async Task<bool> IsUsernameTakenAsync(string username, CancellationToken cancellationToken = default)
+    {
+        return await _context.Users
+            .AnyAsync(u => u.Username == username, cancellationToken);
+    }
+    
     public async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _context.Users
@@ -28,6 +34,7 @@ public class UserRepository : IUserRepository
     {
         // اینجا شاید نیاز باشد RefreshTokens را هم لود کنیم اگر برای لاگین استفاده می‌شود
         return await _context.Users
+            .TagWith("GetByPhoneNumberAsync")
             .Include(u => u.RefreshTokens) 
             .SingleOrDefaultAsync(u => u.PhoneNumber == phoneNumber, cancellationToken);
     }

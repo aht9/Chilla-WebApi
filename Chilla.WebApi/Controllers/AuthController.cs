@@ -1,6 +1,5 @@
 ﻿using Chilla.Application.Features.Auth.Commands;
 using MediatR;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Chilla.WebApi.Controllers;
@@ -83,58 +82,6 @@ public class AuthController : ControllerBase
         return Ok(new { message = "پروفایل با موفقیت تکمیل شد." });
     }
 
-    
-    [HttpPost("refresh-token")]
-    public async Task<IActionResult> RefreshToken()
-    {
-        // دریافت توکن از کوکی (امنیت HttpOnly)
-        var refreshToken = Request.Cookies["refreshToken"];
-    
-        if (string.IsNullOrEmpty(refreshToken))
-            return Unauthorized(new { message = "رفرش توکن یافت نشد." });
-
-        var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
-    
-        try 
-        {
-            var command = new RefreshTokenCommand(refreshToken, ipAddress);
-            var result = await _mediator.Send(command);
-
-            // جایگزینی کوکی قدیمی با جدید (Rotation)
-            SetRefreshTokenCookie(result.RefreshToken);
-
-            return Ok(new 
-            { 
-                accessToken = result.AccessToken,
-                isProfileCompleted = result.IsProfileCompleted // شاید در این مدت پروفایلش را تکمیل کرده باشد
-            });
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // اگر تمدید شکست خورد، کوکی را پاک می‌کنیم تا کاربر لاگ‌اوت شود
-            Response.Cookies.Delete("refreshToken");
-            return Unauthorized(new { message = "نشست کاربری منقضی شده است. لطفاً مجدداً وارد شوید." });
-        }
-    }
-
-    [HttpPost("logout")]
-    [Authorize] // فقط کاربر لاگین شده می‌تواند لاگ‌اوت کند
-    public async Task<IActionResult> Logout()
-    {
-        var refreshToken = Request.Cookies["refreshToken"];
-        if (!string.IsNullOrEmpty(refreshToken))
-        {
-            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
-            // اینجا می‌توانید یک Command برای Revoke کردن توکن در دیتابیس هم صدا بزنید
-            // فعلاً کوکی را پاک می‌کنیم
-        }
-
-        Response.Cookies.Delete("refreshToken");
-        return Ok(new { message = "خروج با موفقیت انجام شد." });
-        
-        
-        
-    }
     // --- Helper Methods ---
 
     private void SetRefreshTokenCookie(string refreshToken)

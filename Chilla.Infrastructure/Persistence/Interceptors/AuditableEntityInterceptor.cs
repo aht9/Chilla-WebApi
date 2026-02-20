@@ -28,8 +28,6 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
                 entry.Entity.UpdateAudit();
             }
             
-            // اگر نیاز بود CreatedAt هم اینجا ست شود (هرچند در سازنده ست می‌شود):
-            // if (entry.State == EntityState.Added) { ... }
         }
     }
 }

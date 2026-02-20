@@ -1,4 +1,6 @@
-﻿namespace Chilla.Domain.Aggregates.PlanAggregate;
+﻿using Chilla.Domain.Aggregates.NotificationAggregate;
+
+namespace Chilla.Domain.Aggregates.PlanAggregate;
 
 
 public enum TaskType
@@ -11,24 +13,37 @@ public enum TaskType
 
 public class PlanTemplateItem : BaseEntity
 {
-    public int DayNumber { get; private set; } // 1 to 40
+    public int StartDay { get; private set; } 
+    public int EndDay { get; private set; }
     public string TaskName { get; private set; }
     public TaskType Type { get; private set; }
     
-    // JSON Configuration for flexibility.
-    // Example for Counter: { "target": 100, "step_text": "Ya Allah" }
-    // Example for TimeBound: { "before_time": "05:30" }
+    // تنظیمات نوتیفیکیشن اختصاصی برای این تسک
+    public NotificationType RequiredNotifications { get; private set; }
+
+    // JSON برای تنظیمات مذهبی (مثل: ۱ ساعت قبل از اذان)
     public string ConfigJson { get; private set; } 
     public bool IsMandatory { get; private set; }
 
     private PlanTemplateItem() { }
 
-    public PlanTemplateItem(int dayNumber, string taskName, TaskType type, string configJson, bool isMandatory)
+    public PlanTemplateItem(int startDay, int endDay, string taskName, TaskType type, string configJson, bool isMandatory, NotificationType requiredNotifications)
     {
-        DayNumber = dayNumber;
+        if (startDay > endDay) throw new ArgumentException("Start day cannot be after end day.");
+        if (startDay < 1) throw new ArgumentException("Start day must be at least 1.");
+
+        StartDay = startDay;
+        EndDay = endDay;
         TaskName = taskName;
         Type = type;
         ConfigJson = configJson;
         IsMandatory = isMandatory;
+        RequiredNotifications = requiredNotifications;
+    }
+
+    // متد کمکی برای بررسی اینکه آیا این آیتم شامل روز خاصی می‌شود یا خیر
+    public bool CoversDay(int day)
+    {
+        return day >= StartDay && day <= EndDay;
     }
 }

@@ -4,8 +4,8 @@ namespace Chilla.Domain.Aggregates.UserAggregate;
 
 public class User : BaseEntity, IAggregateRoot
 {
-    public string FirstName { get; private set; }
-    public string LastName { get; private set; }
+    public string? FirstName { get; private set; }
+    public string? LastName { get; private set; }
     public string Username { get; private set; }
     public string PhoneNumber { get; private set; }
     public string? Email { get; private set; }
@@ -30,12 +30,13 @@ public class User : BaseEntity, IAggregateRoot
     // سازنده برای ثبت‌نام سریع با شماره موبایل
     public User(string phoneNumber)
     {
+        Id = Guid.NewGuid();
         if (string.IsNullOrWhiteSpace(phoneNumber)) throw new ArgumentNullException(nameof(phoneNumber));
         PhoneNumber = phoneNumber;
         Username = phoneNumber; // موقتاً نام کاربری همان شماره تلفن است
         IsActive = true;
         
-        AddDomainEvent(new UserRegisteredEvent(this));
+        AddDomainEvent(new UserRegisteredEvent(this.Id));
     }
 
     public User(string firstName, string lastName, string username, string phoneNumber, string? email = null)
@@ -45,13 +46,14 @@ public class User : BaseEntity, IAggregateRoot
         if (string.IsNullOrWhiteSpace(username)) throw new ArgumentNullException(nameof(username));
         if (string.IsNullOrWhiteSpace(phoneNumber)) throw new ArgumentNullException(nameof(phoneNumber));
 
+        Id = Guid.NewGuid();
         FirstName = firstName;
         LastName = lastName;
         Username = username;
         PhoneNumber = phoneNumber;
         Email = email;
         IsActive = true;
-        AddDomainEvent(new UserRegisteredEvent(this));
+        AddDomainEvent(new UserRegisteredEvent(this.Id));
     }
 
     // --- Profile Management ---
@@ -113,7 +115,6 @@ public class User : BaseEntity, IAggregateRoot
         {
             LockoutEnd = DateTimeOffset.UtcNow.AddMinutes(20); // Block duration
         }
-
         UpdateAudit();
     }
 
@@ -127,11 +128,6 @@ public class User : BaseEntity, IAggregateRoot
     // --- Token Management ---
     public void AddRefreshToken(string token, string remoteIp, double daysToExpire = 30)
     {
-        // Clean up old/invalid tokens to prevent table bloat
-        var invalidTokens = _refreshTokens
-            .Where(t => !t.IsActive && t.Created.AddDays(daysToExpire + 2) < DateTime.UtcNow).ToList();
-        foreach (var t in invalidTokens) _refreshTokens.Remove(t);
-
         _refreshTokens.Add(new UserRefreshToken(token, DateTime.UtcNow.AddDays(daysToExpire), remoteIp));
     }
 
@@ -142,16 +138,40 @@ public class User : BaseEntity, IAggregateRoot
     }
     
     
-    public bool RevokeRefreshToken(string token, string ipAddress, string reason)
+    public bool RevokeRefreshToken(string token, string ipAddress, string reason, string? replacedByToken = null)
     {
         var existingToken = _refreshTokens.SingleOrDefault(t => t.Token == token);
-        if (existingToken != null && existingToken.IsActive)
+        
+        // حتی اگر توکن Active نباشد ولی هنوز Revoke نشده باشد، می‌توانیم آن را Revoke کنیم
+        if (existingToken != null && !existingToken.IsRevoked)
         {
-            existingToken.Revoke(ipAddress, reason);
+            existingToken.Revoke(ipAddress, reason, replacedByToken);
             return true;
         }
 
         return false;
+    }
+
+    // متد جدید برای چرخش امن توکن (Rotation)
+    public void RotateRefreshToken(UserRefreshToken oldToken, string newTokenValue, string ipAddress)
+    {
+        var tokenToRevoke = _refreshTokens.SingleOrDefault(t => t.Id == oldToken.Id);
+        if (tokenToRevoke != null)
+        {
+            tokenToRevoke.Revoke(ipAddress, "Replaced by new token", newTokenValue);
+        }
+        
+        AddRefreshToken(newTokenValue, ipAddress);
+    }
+
+    // متد جدید برای ابطال همه توکن‌ها (در موارد امنیتی یا تغییر پسورد)
+    public void RevokeAllRefreshTokens(string ipAddress, string reason)
+    {
+        foreach (var token in _refreshTokens.Where(t => !t.IsRevoked))
+        {
+            token.Revoke(ipAddress, reason);
+        }
+        UpdateAudit();
     }
 
     // متد برای افزودن نقش به کاربر
@@ -175,13 +195,12 @@ public class User : BaseEntity, IAggregateRoot
         }
     }
     
-    // متد لاگین موفق (به‌روزرسانی آمار)
-    public void RecordLoginSuccess(string ipAddress, string refreshToken, double refreshTokenExpiryDays = 30)
+    public void LockoutUntil(DateTimeOffset lockoutEnd)
     {
-        AccessFailedCount = 0;
-        LockoutEnd = null;
-        AddRefreshToken(refreshToken, ipAddress, refreshTokenExpiryDays);
-        // اینجا ایونت لاگین هم می‌توان منتشر کرد
+        LockoutEnd = lockoutEnd;
+        AccessFailedCount = 0; 
         UpdateAudit();
     }
+    
+    
 }

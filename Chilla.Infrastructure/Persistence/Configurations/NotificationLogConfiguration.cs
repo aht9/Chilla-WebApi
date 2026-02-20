@@ -17,5 +17,7 @@ public class NotificationLogConfiguration : IEntityTypeConfiguration<Notificatio
         builder.HasIndex(n => n.UserId);
         // ایندکس برای لاگ‌برداری ادمین
         builder.HasIndex(n => n.CreatedAt);
+
+        builder.Property(n => n.RowVersion).IsRowVersion();
     }
 }

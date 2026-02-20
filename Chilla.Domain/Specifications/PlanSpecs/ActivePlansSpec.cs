@@ -4,8 +4,14 @@ namespace Chilla.Domain.Specifications.PlanSpecs;
 
 public class ActivePlansSpec : BaseSpecification<Plan>
 {
-    public ActivePlansSpec() : base(p => p.IsActive && !p.IsDeleted)
+    public ActivePlansSpec(bool includeDetails = true) 
+        : base(p => p.IsActive && !p.IsDeleted) 
     {
-        AddInclude(p => p.Items); // Eager load template items
+        ApplyOrderBy(p => p.Price);
+
+        if (includeDetails)
+        {
+            AddInclude(p => p.Items);
+        }
     }
 }

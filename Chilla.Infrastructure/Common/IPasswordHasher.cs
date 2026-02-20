@@ -1,4 +1,4 @@
-﻿namespace Chilla.Application.Common.Interfaces;
+﻿namespace Chilla.Infrastructure.Common;
 
 public interface IPasswordHasher
 {
