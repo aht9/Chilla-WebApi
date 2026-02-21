@@ -3,23 +3,27 @@
 public class Invoice : BaseEntity, IAggregateRoot
 {
     public Guid UserId { get; private set; }
-    public Guid PlanId { get; private set; }
-    public decimal Amount { get; private set; }
+    public Guid? PlanId { get; private set; } // نال‌بل شد تا برای سبد خرید (چندین چله) ارور ندهد
+    
+    // فیلدهای جدید برای پشتیبانی از سبد خرید و کوپن
+    public decimal TotalAmount { get; private set; } 
+    public decimal DiscountAmount { get; private set; }
+    public string? CouponCode { get; private set; }
+    
+    public decimal Amount { get; private set; } // مبلغ نهایی پرداختی
     public string? Description { get; private set; }
     
     // اطلاعات درگاه پرداخت
     public string? GatewayName { get; private set; }
-    public string? Authority { get; private set; } // توکن اولیه بانک
-    public string? RefId { get; private set; }     // کد رهگیری نهایی
+    public string? Authority { get; private set; } 
+    public string? RefId { get; private set; }     
     
     public PaymentStatus Status { get; private set; }
     public DateTime? PaidAt { get; private set; }
 
-    private Invoice()
-    {
-        Id = Guid.NewGuid();
-    }
+    private Invoice() { Id = Guid.NewGuid(); }
 
+    // سازنده قدیمی (برای خریدهای تکی مستقیم)
     public Invoice(Guid userId, Guid planId, decimal amount, string? description)
     {
         if (userId == Guid.Empty) throw new ArgumentException("UserId required");
@@ -29,11 +33,31 @@ public class Invoice : BaseEntity, IAggregateRoot
         Id = Guid.NewGuid();
         UserId = userId;
         PlanId = planId;
+        TotalAmount = amount;
         Amount = amount;
         Description = description;
         Status = PaymentStatus.Pending;
 
         AddDomainEvent(new InvoiceCreatedEvent(this.Id, userId, amount));
+    }
+
+    // سازنده جدید (مخصوص سبد خرید و اعمال کوپن)
+    public Invoice(Guid userId, decimal totalAmount, decimal discountAmount, decimal payableAmount, string? couponCode, string? description = "پرداخت سبد خرید")
+    {
+        if (userId == Guid.Empty) throw new ArgumentException("UserId required");
+        if (payableAmount < 0) throw new ArgumentException("PayableAmount cannot be negative");
+
+        Id = Guid.NewGuid();
+        UserId = userId;
+        PlanId = null; // چون سبد خرید است، به یک پلن خاص محدود نمی‌شود
+        TotalAmount = totalAmount;
+        DiscountAmount = discountAmount;
+        Amount = payableAmount;
+        CouponCode = couponCode;
+        Description = description;
+        Status = PaymentStatus.Pending;
+
+        AddDomainEvent(new InvoiceCreatedEvent(this.Id, userId, payableAmount));
     }
 
     public void SetGatewayAuthority(string gatewayName, string authority)
@@ -48,7 +72,7 @@ public class Invoice : BaseEntity, IAggregateRoot
 
     public void MarkAsPaid(string refId)
     {
-        if (Status == PaymentStatus.Paid) return; // Idempotency: قبلاً پرداخت شده
+        if (Status == PaymentStatus.Paid) return; 
         if (Status == PaymentStatus.Canceled) throw new InvalidOperationException("Cannot pay a canceled invoice.");
 
         Status = PaymentStatus.Paid;
@@ -56,12 +80,13 @@ public class Invoice : BaseEntity, IAggregateRoot
         PaidAt = DateTime.UtcNow;
         UpdateAudit();
 
-        AddDomainEvent(new InvoicePaidEvent(this.Id, this.UserId, this.PlanId, refId));
+        // نکته: اگر InvoicePaidEvent فقط Guid می‌گیرد، از ?? Guid.Empty استفاده می‌کنیم
+        AddDomainEvent(new InvoicePaidEvent(this.Id, this.UserId, this.PlanId ?? Guid.Empty, refId));
     }
 
     public void MarkAsFailed(string reason)
     {
-        if (Status == PaymentStatus.Paid) return; // نمی‌توان موفق را شکست‌خورده کرد
+        if (Status == PaymentStatus.Paid) return; 
 
         Status = PaymentStatus.Failed;
         Description = string.IsNullOrEmpty(Description) ? $"Failed: {reason}" : $"{Description} | Failed: {reason}";

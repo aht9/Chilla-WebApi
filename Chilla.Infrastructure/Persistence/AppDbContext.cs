@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using Chilla.Domain.Aggregates.CartAggregate;
 using Chilla.Domain.Aggregates.CouponAggregate;
 using Chilla.Domain.Aggregates.InvoiceAggregate;
 using Chilla.Domain.Aggregates.NotificationAggregate;
@@ -37,6 +38,7 @@ public class AppDbContext : DbContext, IUnitOfWork
     public DbSet<PlanTemplateItem> PlanTemplateItems { get; set; }
     public DbSet<DailyProgress> DailyProgresses { get; set; }
     public DbSet<Coupon> Coupons => Set<Coupon>();
+    public DbSet<Cart> Carts => Set<Cart>();
     
     private IDbContextTransaction? _currentTransaction;
 

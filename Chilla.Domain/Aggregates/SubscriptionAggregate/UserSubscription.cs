@@ -1,6 +1,13 @@
 ﻿namespace Chilla.Domain.Aggregates.SubscriptionAggregate;
 
-public enum SubscriptionStatus { Active, Completed, Failed, Canceled, PendingPayment }
+public enum SubscriptionStatus
+{
+    Active,
+    Completed,
+    Failed,
+    Canceled,
+    PendingPayment
+}
 
 public class UserSubscription : BaseEntity, IAggregateRoot
 {
@@ -9,7 +16,8 @@ public class UserSubscription : BaseEntity, IAggregateRoot
     public DateTime StartDate { get; private set; }
     public DateTime? EndDate { get; private set; }
     public SubscriptionStatus Status { get; private set; }
-    
+    public Guid? InvoiceId { get; private set; }
+
     private readonly List<DailyProgress> _progress = new();
     public IReadOnlyCollection<DailyProgress> Progress => _progress.AsReadOnly();
 
@@ -18,7 +26,8 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         Id = Guid.NewGuid();
     }
 
-    public UserSubscription(Guid userId, Guid planId)
+    // سازنده آپدیت شده برای پذیرش آیدی فاکتور
+    public UserSubscription(Guid userId, Guid planId, Guid? invoiceId, bool requiresPayment)
     {
         if (userId == Guid.Empty) throw new ArgumentException("UserId required");
         if (planId == Guid.Empty) throw new ArgumentException("PlanId required");
@@ -26,8 +35,11 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         Id = Guid.NewGuid();
         UserId = userId;
         PlanId = planId;
+        InvoiceId = invoiceId;
         StartDate = DateTime.UtcNow;
-        Status = SubscriptionStatus.Active;
+
+        // اگر نیاز به پرداخت دارد، وضعیت معلق می‌گیرد، در غیر اینصورت فعال می‌شود
+        Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
     }
 
     public UserSubscription(Guid userId, Guid planId, DateTime startDate, DateTime endDate, bool requiresPayment)
@@ -41,7 +53,7 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         PlanId = planId;
         StartDate = startDate;
         EndDate = endDate;
-        
+
         Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
     }
 
@@ -56,12 +68,13 @@ public class UserSubscription : BaseEntity, IAggregateRoot
 
     public void MarkTaskAsComplete(Guid planTemplateItemId, int valueEntered = 0)
     {
-        if (Status != SubscriptionStatus.Active) 
+        if (Status != SubscriptionStatus.Active)
             throw new InvalidOperationException("Cannot update progress on an inactive subscription.");
 
         var today = DateTime.UtcNow.Date;
-        
-        var existing = _progress.SingleOrDefault(p => p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
+
+        var existing = _progress.SingleOrDefault(p =>
+            p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
 
         if (existing != null)
         {
@@ -71,18 +84,19 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         {
             _progress.Add(new DailyProgress(planTemplateItemId, today, valueEntered));
         }
-        
+
         UpdateAudit();
     }
-    
+
     public void MarkTaskAsCompleteWithCommitment(Guid planTemplateItemId, int valueEntered, string commitmentReason)
     {
-        if (Status != SubscriptionStatus.Active) 
+        if (Status != SubscriptionStatus.Active)
             throw new InvalidOperationException("Cannot update progress on an inactive subscription.");
 
         var today = DateTime.UtcNow.Date;
-        
-        var existing = _progress.SingleOrDefault(p => p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
+
+        var existing = _progress.SingleOrDefault(p =>
+            p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
 
         if (existing != null)
         {
@@ -92,14 +106,15 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         {
             _progress.Add(new DailyProgress(planTemplateItemId, today, valueEntered, true, commitmentReason));
         }
-        
+
         UpdateAudit();
     }
 
     public void CancelSubscription()
     {
-        if (Status == SubscriptionStatus.Completed) throw new InvalidOperationException("Cannot cancel a completed subscription.");
-        
+        if (Status == SubscriptionStatus.Completed)
+            throw new InvalidOperationException("Cannot cancel a completed subscription.");
+
         Status = SubscriptionStatus.Canceled;
         EndDate = DateTime.UtcNow;
         UpdateAudit();
@@ -116,7 +131,7 @@ public class UserSubscription : BaseEntity, IAggregateRoot
 
     public void FailSubscription()
     {
-         if (Status != SubscriptionStatus.Active) return;
+        if (Status != SubscriptionStatus.Active) return;
 
         Status = SubscriptionStatus.Failed;
         EndDate = DateTime.UtcNow;

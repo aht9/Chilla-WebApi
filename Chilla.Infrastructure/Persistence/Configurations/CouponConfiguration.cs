@@ -18,7 +18,6 @@ public class CouponConfiguration : IEntityTypeConfiguration<Coupon>
         builder.Property(c => c.MaxDiscountAmount).HasPrecision(18, 2);
         builder.Property(c => c.MinPurchaseAmount).HasPrecision(18, 2);
 
-        // اضافه کردن این خط برای رفع خطای RowVersion
         builder.Property(c => c.RowVersion).IsRowVersion();
     }
 }
