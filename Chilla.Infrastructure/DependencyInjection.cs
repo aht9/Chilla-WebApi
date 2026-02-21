@@ -1,5 +1,6 @@
 ﻿using System.Data;
 using System.Text;
+using Chilla.Domain.Aggregates.CouponAggregate;
 using Chilla.Domain.Aggregates.InvoiceAggregate;
 using Chilla.Domain.Aggregates.PlanAggregate;
 using Chilla.Domain.Aggregates.SubscriptionAggregate;
@@ -53,7 +54,8 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IPlanRepository, PlanRepository>();
         services.AddScoped<ISubscriptionRepository, SubscriptionRepository>();
-        services.AddScoped<IInvoiceRepository, InvoiceRepository>(); // Added Registration
+        services.AddScoped<IInvoiceRepository, InvoiceRepository>(); 
+        services.AddScoped<ICouponRepository, CouponRepository>();
 
         // 2. Dapper & Redis
         
