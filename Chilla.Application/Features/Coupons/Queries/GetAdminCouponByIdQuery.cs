@@ -17,7 +17,13 @@ public class GetAdminCouponByIdQueryHandler : IRequestHandler<GetAdminCouponById
 
     public async Task<CouponDto> Handle(GetAdminCouponByIdQuery request, CancellationToken cancellationToken)
     {
-        var sql = "SELECT * FROM Coupons WHERE Id = @Id AND IsDeleted = 0";
+        var sql = @"
+            SELECT 
+                Id, Code, DiscountType, DiscountValue, MaxDiscountAmount, 
+                MinPurchaseAmount, MaxUsageCount, CurrentUsageCount, 
+                StartDate, EndDate, IsActive, SpecificUserId, CreatedAt 
+            FROM Coupons 
+            WHERE Id = @Id AND IsDeleted = 0";
         var coupon = await _dapperService.QuerySingleOrDefaultAsync<CouponDto>(sql, new { Id = request.Id }, cancellationToken: cancellationToken);
         
         if (coupon == null) throw new KeyNotFoundException("کد تخفیف یافت نشد.");

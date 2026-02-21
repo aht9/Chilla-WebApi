@@ -67,8 +67,10 @@ namespace Chilla.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
                         .IsRequired()
-                        .HasColumnType("varbinary(max)");
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
 
                     b.Property<Guid?>("SpecificUserId")
                         .HasColumnType("uniqueidentifier");

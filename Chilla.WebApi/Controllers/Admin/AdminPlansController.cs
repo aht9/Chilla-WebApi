@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Chilla.WebApi.Controllers.Admin;
 
-[Authorize(Roles = "Admin")] 
+[Authorize(Roles = "SuperAdmin")] 
 [Route("api/admin/plans")]
 [ApiController]
 public class AdminPlansController : ControllerBase

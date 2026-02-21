@@ -8,7 +8,7 @@ namespace Chilla.WebApi.Controllers.Admin;
 
 [Route("api/admin/coupons")]
 [ApiController]
-[Authorize(Roles = "Admin")] 
+[Authorize(Roles = "SuperAdmin")] 
 public class AdminCouponsController : Controller
 {
     private readonly IMediator _mediator;

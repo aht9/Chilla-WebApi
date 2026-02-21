@@ -1,4 +1,5 @@
 ﻿using Chilla.Domain.Common;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Chilla.Infrastructure.Persistence.Interceptors;
@@ -23,11 +24,21 @@ public class AuditableEntityInterceptor : SaveChangesInterceptor
 
         foreach (var entry in context.ChangeTracker.Entries<BaseEntity>())
         {
+            // ۱. اگر رکورد در حال ویرایش است، فقط تاریخ آپدیت را ثبت کن
             if (entry.State == EntityState.Modified)
             {
-                entry.Entity.UpdateAudit();
+                // فرض بر این است که UpdateAudit در BaseEntity تاریخ UpdatedAt را تنظیم می‌کند
+                entry.Entity.UpdateAudit(); 
             }
-            
+            // ۲. اگر دستور حذف (Remove) صادر شده است، جلوی آن را بگیر
+            else if (entry.State == EntityState.Deleted)
+            {
+                // وضعیت را از حذف به ویرایش تغییر بده (تا در دیتابیس بماند)
+                entry.State = EntityState.Modified;
+                
+                // متد Delete که در BaseEntity نوشتید را صدا بزنید تا IsDeleted=true شود
+                entry.Entity.Delete(); 
+            }
         }
     }
 }

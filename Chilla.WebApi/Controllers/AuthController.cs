@@ -133,7 +133,7 @@ public class AuthController : ControllerBase
         return Ok(new { message = "خروج با موفقیت انجام شد." });
     }
 
-    [HttpPost("forgot-password/{phoneNumber}")]
+    [HttpGet("forgot-password/{phoneNumber}")]
     public async Task<IActionResult> ForgotPassword(string phoneNumber)
     {
         var command = new ForgotPasswordCommand(phoneNumber);
