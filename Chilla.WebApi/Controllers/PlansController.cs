@@ -19,7 +19,7 @@ public class PlansController : ControllerBase
     }
 
     // مشاهده لیست پلن‌های قابل خرید
-    [AllowAnonymous] // یا Authorize بسته به نیاز
+    [AllowAnonymous] 
     [HttpGet]
     public async Task<IActionResult> GetActivePlans()
     {

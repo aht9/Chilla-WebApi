@@ -34,7 +34,13 @@ public class LoginWithPasswordHandler : IRequestHandler<LoginWithPasswordCommand
         var user = await _userRepository.GetByUsernameAsync(request.Username, cancellationToken);
 
         if (user == null || user.PasswordHash == null)
-            throw new Exception("نام کاربری یا کلمه عبور اشتباه است.");
+            throw new InvalidCredentialsException("نام کاربری یا کلمه عبور اشتباه است.");
+
+        if (user.IsLockedOut) 
+            throw new InvalidCredentialsException($"حساب کاربری شما تا {user.LockoutEnd} مسدود است.");
+            
+        if (!user.IsActive) 
+            throw new InvalidCredentialsException("حساب کاربری غیرفعال است.");
 
         bool isPasswordValid = _passwordHasher.VerifyPassword(request.Password, user.PasswordHash);
 
@@ -45,12 +51,13 @@ public class LoginWithPasswordHandler : IRequestHandler<LoginWithPasswordCommand
             throw new InvalidCredentialsException("نام کاربری یا کلمه عبور اشتباه است.");
         }
 
-        if (user.IsLockedOut) throw new InvalidCredentialsException($"حساب کاربری تا {user.LockoutEnd} مسدود است.");
-        if (!user.IsActive) throw new InvalidCredentialsException("حساب کاربری غیرفعال است.");
-
         user.ResetLoginStats();
 
-        var accessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, "User");
+        // استخراج نقش‌های کاربر از ریلیشن
+        var userRoleNames = user.Roles.Select(ur => ur.Role.Name).ToList();
+        if (!userRoleNames.Any()) userRoleNames.Add("User");
+
+        var accessToken = _jwtGenerator.GenerateAccessToken(user.Id, user.Username, userRoleNames);
         var refreshToken = _jwtGenerator.GenerateRefreshToken();
 
         user.AddRefreshToken(refreshToken, request.IpAddress);

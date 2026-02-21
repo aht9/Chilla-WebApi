@@ -179,7 +179,7 @@ public class User : BaseEntity, IAggregateRoot
     {
         if (!_roles.Any(r => r.RoleId == roleId))
         {
-            _roles.Add(new UserRole(roleId));
+            _roles.Add(new UserRole(this.Id,roleId));
             UpdateAudit();
         }
     }

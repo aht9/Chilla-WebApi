@@ -9,10 +9,11 @@ public class UserRoleConfiguration : IEntityTypeConfiguration<UserRole>
         builder.ToTable("UserRoles");
         builder.HasKey(r => r.Id);
 
-        // Shadow FK Index
-        builder.HasIndex("UserId");
+        builder.HasOne(ur => ur.Role)
+            .WithMany() 
+            .HasForeignKey(ur => ur.RoleId)
+            .OnDelete(DeleteBehavior.Restrict); 
         
-        builder.HasIndex(r => r.RoleId);
         builder.Property(t => t.RowVersion).IsRowVersion();
     }
 }

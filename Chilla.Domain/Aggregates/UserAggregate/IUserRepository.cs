@@ -18,4 +18,6 @@ public interface IUserRepository
     
     // متد Delete هم صرفاً State را تغییر می‌دهد
     void Delete(User user);
+    Task<User?> GetByRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
+    
 }

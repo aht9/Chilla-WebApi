@@ -27,6 +27,7 @@ public class UserRepository : IUserRepository
     public async Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
     {
         return await _context.Users
+            .Include(u => u.Roles).ThenInclude(ur => ur.Role) // واکشی نقش‌ها
             .SingleOrDefaultAsync(u => u.Username == username, cancellationToken);
     }
 
@@ -61,5 +62,13 @@ public class UserRepository : IUserRepository
         // اینجا فقط آپدیت می‌کنیم یا اگر Hard Delete بخواهیم Remove می‌کنیم.
         // با توجه به BaseEntity و Soft Delete:
         _context.Users.Update(user); 
+    }
+    
+    public async Task<User?> GetByRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+    {
+        return await _context.Users
+            .Include(u => u.RefreshTokens)
+            .Include(u => u.Roles).ThenInclude(ur => ur.Role) // واکشی نقش‌ها برای قرار دادن در توکن
+            .SingleOrDefaultAsync(u => u.RefreshTokens.Any(t => t.Token == refreshToken), cancellationToken);
     }
 }
