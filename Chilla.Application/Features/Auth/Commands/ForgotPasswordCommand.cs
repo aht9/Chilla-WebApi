@@ -5,9 +5,9 @@ using MediatR;
 
 namespace Chilla.Application.Features.Auth.Commands;
 
-public record ForgotPasswordCommand(string PhoneNumber) : IRequest<bool>;
+public record ForgotPasswordCommand(string PhoneNumber) : IRequest<ResultSampleResetPasswordCode>;
 
-public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, bool>
+public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, ResultSampleResetPasswordCode>
 {
     private readonly IUserRepository _userRepository;
     private readonly IOtpService _otpService;
@@ -20,7 +20,7 @@ public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, bool
         _smsSender = smsSender;
     }
 
-    public async Task<bool> Handle(ForgotPasswordCommand request, CancellationToken cancellationToken)
+    public async Task<ResultSampleResetPasswordCode> Handle(ForgotPasswordCommand request, CancellationToken cancellationToken)
     {
         // 1. بررسی وجود کاربر
         // به دلایل امنیتی، حتی اگر کاربر وجود نداشت، نباید خطا برگردانیم (User Enumeration)
@@ -31,7 +31,10 @@ public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, bool
         {
             // شبیه‌سازی تاخیر برای جلوگیری از تایمینگ اتک
             await Task.Delay(500, cancellationToken);
-            return true; // به کاربر می‌گوییم ارسال شد (حتی اگر نشد)
+            return new ResultSampleResetPasswordCode
+            {
+                Result = true
+            }; // به کاربر می‌گوییم ارسال شد (حتی اگر نشد)
         }
 
         // 2. تولید کد با هدف "reset-password"
@@ -40,6 +43,17 @@ public class ForgotPasswordHandler : IRequestHandler<ForgotPasswordCommand, bool
         // 3. ارسال پیامک
         await _smsSender.SendAsync(request.PhoneNumber, $"کد تغییر رمز عبور: {code}");
 
-        return true;
+        return new ResultSampleResetPasswordCode
+        {
+            Result = true,
+            Code = code
+        };
     }
+}
+
+
+public class ResultSampleResetPasswordCode
+{
+    public bool Result { get; set; }
+    public string Code { get; set; }
 }
