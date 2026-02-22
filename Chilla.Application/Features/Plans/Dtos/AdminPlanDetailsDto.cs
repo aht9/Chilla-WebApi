@@ -26,11 +26,3 @@ public record PlanItemAdminDto(
     TaskScheduleDto? ScheduleConfig // این آبجکت از روی ConfigJson ساخته می‌شود
 );
 
-// این همان کلاسی است که قبلا تعریف کردیم، اینجا برای DTO خروجی استفاده می‌شود
-public record TaskScheduleDto(
-    int TargetCount, 
-    string TimeReference, 
-    int StartOffsetMinutes, 
-    int DurationMinutes,
-    string? Description
-);

@@ -19,7 +19,7 @@ public class PlansController : ControllerBase
     }
 
     // مشاهده لیست پلن‌های قابل خرید
-    [AllowAnonymous] 
+    [AllowAnonymous]
     [HttpGet]
     public async Task<IActionResult> GetActivePlans()
     {
@@ -28,12 +28,25 @@ public class PlansController : ControllerBase
         return Ok(result);
     }
 
+    // کلاس کمکی برای دریافت اطلاعات بادی (Body)
+    public record PurchasePlanRequest(List<UserNotificationPreferenceDto> UserPreferences);
+
     // خرید یا افزودن پلن به داشبورد
     [HttpPost("{id}/purchase")]
-    public async Task<IActionResult> PurchasePlan(Guid id)
+    public async Task<IActionResult> PurchasePlan(Guid id, [FromBody] PurchasePlanRequest request)
     {
-        var command = new PurchasePlanCommand(id);
+        // در صورتی که کاربر هیچ تنظیمی نفرستاده بود، یک لیست خالی پاس می‌دهیم
+        var preferences = request?.UserPreferences ?? new List<UserNotificationPreferenceDto>();
+
+        // ارسال ID پلن به همراه تنظیمات اختصاصی کاربر به Command
+        var command = new PurchasePlanCommand(id, preferences);
+
         var subscriptionId = await _mediator.Send(command);
-        return Ok(new { SubscriptionId = subscriptionId, Message = "Plan added successfully." });
+
+        return Ok(new
+        {
+            SubscriptionId = subscriptionId,
+            Message = "Plan purchased/added successfully. Notification preferences applied."
+        });
     }
 }

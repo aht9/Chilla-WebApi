@@ -1,4 +1,6 @@
-﻿namespace Chilla.Domain.Aggregates.SubscriptionAggregate;
+﻿using Chilla.Domain.Exceptions;
+
+namespace Chilla.Domain.Aggregates.SubscriptionAggregate;
 
 public enum SubscriptionStatus
 {
@@ -17,6 +19,7 @@ public class UserSubscription : BaseEntity, IAggregateRoot
     public DateTime? EndDate { get; private set; }
     public SubscriptionStatus Status { get; private set; }
     public Guid? InvoiceId { get; private set; }
+    public string? NotificationPreferencesJson { get; private set; }
 
     private readonly List<DailyProgress> _progress = new();
     public IReadOnlyCollection<DailyProgress> Progress => _progress.AsReadOnly();
@@ -42,7 +45,8 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
     }
 
-    public UserSubscription(Guid userId, Guid planId, DateTime startDate, DateTime endDate, bool requiresPayment)
+    public UserSubscription(Guid userId, Guid planId, DateTime startDate, DateTime endDate, bool requiresPayment,
+        string? notificationPreferencesJson)
     {
         if (userId == Guid.Empty) throw new ArgumentException("UserId required");
         if (planId == Guid.Empty) throw new ArgumentException("PlanId required");
@@ -53,6 +57,7 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         PlanId = planId;
         StartDate = startDate;
         EndDate = endDate;
+        NotificationPreferencesJson = notificationPreferencesJson;
 
         Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
     }
@@ -66,12 +71,35 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         }
     }
 
-    public void MarkTaskAsComplete(Guid planTemplateItemId, int valueEntered = 0)
+    public void MarkTaskAsComplete(Guid planTemplateItemId, int valueEntered = 0, bool requiresUnbrokenChain = false)
     {
         if (Status != SubscriptionStatus.Active)
-            throw new InvalidOperationException("Cannot update progress on an inactive subscription.");
+            throw new DomainException("Cannot update progress on an inactive or failed subscription.");
 
         var today = DateTime.UtcNow.Date;
+
+        // --- منطق بررسی زنجیره پیوسته (Unbroken Chain) ---
+        if (requiresUnbrokenChain)
+        {
+            var yesterday = today.AddDays(-1);
+
+            // فقط در صورتی چک می‌کنیم که اشتراک کاربر حداقل از دیروز شروع شده باشد
+            if (StartDate.Date <= yesterday)
+            {
+                // پیدا کردن پیشرفت روز قبل برای همین تسک
+                var yesterdayProgress = _progress.SingleOrDefault(p =>
+                    p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == yesterday);
+
+                // اگر دیروز این تسک انجام نشده است
+                if (yesterdayProgress == null || !yesterdayProgress.IsCompleted)
+                {
+                    // چله را فیلد می‌کنیم
+                    FailSubscription();
+                    throw new DomainException(
+                        "شما این تسک را در روز قبل انجام نداده‌اید. زنجیره این چله شکسته شده است و متأسفانه نیازمند شروع مجدد هستید.");
+                }
+            }
+        }
 
         var existing = _progress.SingleOrDefault(p =>
             p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);

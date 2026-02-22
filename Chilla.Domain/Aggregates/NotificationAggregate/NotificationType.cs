@@ -8,5 +8,6 @@ public enum NotificationType
     Sms = 2,
     Email = 4,
     Call = 8,
-    Push = 16      // 10000 (برای موبایل)
+    Push = 16,      // 10000 (برای موبایل)
+    VoiceCall = 32 
 }

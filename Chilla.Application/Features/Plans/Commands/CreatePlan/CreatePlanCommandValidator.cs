@@ -1,4 +1,5 @@
-﻿using FluentValidation;
+﻿using Chilla.Application.Features.Plans.Dtos;
+using FluentValidation;
 
 namespace Chilla.Application.Features.Plans.Commands.CreatePlan;
 

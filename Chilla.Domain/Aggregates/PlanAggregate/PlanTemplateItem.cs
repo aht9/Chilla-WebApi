@@ -3,14 +3,6 @@
 namespace Chilla.Domain.Aggregates.PlanAggregate;
 
 
-public enum TaskType
-{
-    Boolean,    // انجام شد/نشد (مثل نماز شب)
-    Counter,    // ذکر شمار (نیاز به TargetCount دارد)
-    TimeBound,  // زمانی (مثل بیداری قبل از ۵ صبح)
-    Reading     // خواندن متن (نمایش متن)
-}
-
 public class PlanTemplateItem : BaseEntity
 {
     public int StartDay { get; private set; } 
