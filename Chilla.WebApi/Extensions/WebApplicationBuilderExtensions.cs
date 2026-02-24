@@ -1,4 +1,5 @@
-﻿using Microsoft.OpenApi.Models;
+﻿using System.Reflection;
+using Microsoft.OpenApi.Models;
 using Serilog;
 
 namespace Chilla.WebApi.Extensions;
@@ -70,8 +71,24 @@ public static class WebApplicationBuilderExtensions
                     new string[] { }
                 }
             });
+
+            // --- [START] XML COMMENTS CONFIGURATION ---
+            // مسیر فایل XML تولید شده توسط بیلد پروژه را پیدا می‌کنیم
+            var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+
+            // اگر فایل وجود داشت، آن را به Swagger اضافه کن
+            if (File.Exists(xmlPath))
+            {
+                options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+            }
+
+            // اگر کامنت‌های پروژه‌های لایه Domain یا Application را هم می‌خواهید نشان دهید،
+            // باید فایل XML آن‌ها را هم به همین شکل اضافه کنید.
+            // --- [END] XML COMMENTS CONFIGURATION ---
         });
         // --- [END] SWAGGER CONFIGURATION ---
+
         return builder;
     }
 

@@ -8,7 +8,7 @@ public interface IPlanRepository
     
     // متد اختصاصی برای گرفتن پلن‌های فعال همراه با آیتم‌هایشان (Eager Loading)
     Task<List<Plan>> GetAllActivePlansAsync(CancellationToken cancellationToken = default);
-    
+    Task<List<Plan>> GetPlansByIdsAsync(IEnumerable<Guid> planIds, CancellationToken cancellationToken = default);
     Task AddAsync(Plan plan, CancellationToken cancellationToken = default);
     void Update(Plan plan);
     void Delete(Plan plan);

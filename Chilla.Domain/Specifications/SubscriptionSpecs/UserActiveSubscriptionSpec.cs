@@ -7,6 +7,6 @@ public class UserActiveSubscriptionSpec : BaseSpecification<UserSubscription>
     public UserActiveSubscriptionSpec(Guid userId) 
         : base(s => s.UserId == userId && s.Status == SubscriptionStatus.Active && !s.IsDeleted)
     {
-        AddInclude(s => s.Progress);
+        AddInclude(s => s.DailyProgresses);
     }
 }

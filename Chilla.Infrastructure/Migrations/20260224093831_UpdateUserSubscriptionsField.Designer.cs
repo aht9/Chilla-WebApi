@@ -4,6 +4,7 @@ using Chilla.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Chilla.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260224093831_UpdateUserSubscriptionsField")]
+    partial class UpdateUserSubscriptionsField
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -567,29 +570,26 @@ namespace Chilla.Infrastructure.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("CountCompleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(0);
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<int>("DayNumber")
-                        .HasColumnType("int");
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
-
-                    b.Property<bool>("IsDone")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsLateEntry")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("LateReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("PlanTemplateItemId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -597,20 +597,23 @@ namespace Chilla.Infrastructure.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
-                    b.Property<Guid>("SubscriptionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uniqueidentifier");
+                    b.Property<DateTime>("ScheduledDate")
+                        .HasColumnType("date");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("UserSubscriptionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Value")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("SubscriptionId", "TaskId", "DayNumber")
-                        .IsUnique()
-                        .HasDatabaseName("IX_DailyProgresses_Subscription_Task_Day");
+                    b.HasIndex("ScheduledDate");
+
+                    b.HasIndex("UserSubscriptionId");
 
                     b.ToTable("DailyProgresses", (string)null);
                 });
@@ -626,11 +629,6 @@ namespace Chilla.Infrastructure.Migrations
 
                     b.Property<DateTime?>("EndDate")
                         .HasColumnType("datetime2");
-
-                    b.Property<bool>("HasSignedCovenant")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(false);
 
                     b.Property<Guid?>("InvoiceId")
                         .HasColumnType("uniqueidentifier");
@@ -903,10 +901,9 @@ namespace Chilla.Infrastructure.Migrations
             modelBuilder.Entity("Chilla.Domain.Aggregates.SubscriptionAggregate.DailyProgress", b =>
                 {
                     b.HasOne("Chilla.Domain.Aggregates.SubscriptionAggregate.UserSubscription", null)
-                        .WithMany("DailyProgresses")
-                        .HasForeignKey("SubscriptionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .WithMany("Progress")
+                        .HasForeignKey("UserSubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Chilla.Domain.Aggregates.UserAggregate.UserRefreshToken", b =>
@@ -951,7 +948,7 @@ namespace Chilla.Infrastructure.Migrations
 
             modelBuilder.Entity("Chilla.Domain.Aggregates.SubscriptionAggregate.UserSubscription", b =>
                 {
-                    b.Navigation("DailyProgresses");
+                    b.Navigation("Progress");
                 });
 
             modelBuilder.Entity("Chilla.Domain.Aggregates.UserAggregate.User", b =>

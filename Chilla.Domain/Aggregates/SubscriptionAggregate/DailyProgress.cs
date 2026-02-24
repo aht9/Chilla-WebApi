@@ -2,39 +2,46 @@
 
 public class DailyProgress : BaseEntity
 {
-    public Guid PlanTemplateItemId { get; private set; }
-    public DateTime ScheduledDate { get; private set; } // تاریخی که باید انجام میشد
-    public DateTime? CompletedAt { get; private set; }  // لحظه واقعی انجام
-    public bool IsCompleted { get; private set; }
-    public int Value { get; private set; }
+    public Guid SubscriptionId { get; private set; } // کلید خارجی به اشتراک کاربر
+    public Guid TaskId { get; private set; }         // همان PlanTemplateItemId
+    public int DayNumber { get; private set; }       // روز چندم چله است؟ (مثلا 1 تا 40)
     
-    // --- فیلدهای جدید برای سناریوی تعهد ---
-    public bool IsLateEntry { get; private set; } // آیا با تأخیر/تعهد ثبت شده؟
-    public string? LateReason { get; private set; } // متن تعهد یا دلیل
+    public bool IsDone { get; private set; }         // برای تسک‌های تیک‌زدنی (مثل خواندن سوره)
+    public int CountCompleted { get; private set; }  // برای تسک‌های شمارشی (مثل 33 بار ذکر)
+    
+    public DateTime? CompletedAt { get; private set; } // زمان دقیق ثبت در سیستم
+    
+    // --- فیلدهای سناریوی تعهدنامه ---
+    public bool IsLateEntry { get; private set; }    // آیا این رکورد مربوط به روزهای گذشته بوده که با تعهدنامه باز شده است؟
 
     private DailyProgress() { }
 
-    public DailyProgress(Guid planTemplateItemId, DateTime scheduledDate, int value, bool isLateEntry = false, string? lateReason = null)
+    public DailyProgress(Guid subscriptionId, Guid taskId, int dayNumber, bool isDone, int countCompleted, bool isLateEntry)
     {
-        PlanTemplateItemId = planTemplateItemId;
-        ScheduledDate = scheduledDate.Date; // فقط تاریخ مهم است
-        CompletedAt = DateTime.UtcNow;
-        IsCompleted = true; // فعلاً فرض بر تکمیل است مگر منطق شمارنده متفاوت باشد
-        Value = value;
+        SubscriptionId = subscriptionId;
+        TaskId = taskId;
+        DayNumber = dayNumber;
+        IsDone = isDone;
+        CountCompleted = countCompleted;
         IsLateEntry = isLateEntry;
-        LateReason = lateReason;
+        
+        // اگر تسک انجام شده تلقی شود، زمان ثبت را ذخیره می‌کنیم
+        CompletedAt = isDone || countCompleted > 0 ? DateTime.UtcNow : null;
     }
 
-    public void UpdateValue(int newValue, bool isLateEntry, string? lateReason)
+    public void UpdateProgress(bool isDone, int countCompleted, bool isLateEntry)
     {
-        Value = newValue;
-        CompletedAt = DateTime.UtcNow;
+        IsDone = isDone;
+        CountCompleted = countCompleted;
         
-        // اگر قبلاً Late بوده، وضعیتش حفظ می‌شود مگر اینکه آپدیت جدید هم Late باشد
+        // بروزرسانی زمان انجام
+        CompletedAt = isDone || countCompleted > 0 ? DateTime.UtcNow : null;
+        
+        // نکته منطقی: اگر این تسک قبلاً به عنوان "تاخیری" (با تعهدنامه) ثبت شده باشد،
+        // حتی اگر امروز ویرایش شود، همچنان مهر "تاخیری" روی آن باقی می‌ماند.
         if (isLateEntry)
         {
             IsLateEntry = true;
-            LateReason = lateReason;
         }
     }
 }

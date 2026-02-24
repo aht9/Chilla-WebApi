@@ -21,15 +21,17 @@ public class UserSubscription : BaseEntity, IAggregateRoot
     public Guid? InvoiceId { get; private set; }
     public string? NotificationPreferencesJson { get; private set; }
 
-    private readonly List<DailyProgress> _progress = new();
-    public IReadOnlyCollection<DailyProgress> Progress => _progress.AsReadOnly();
+    // --- فیلد جدید: وضعیت امضای تعهدنامه برای روزهای گذشته ---
+    public bool HasSignedCovenant { get; private set; }
+
+    private readonly List<DailyProgress> _dailyProgresses = new();
+    public IReadOnlyCollection<DailyProgress> DailyProgresses => _dailyProgresses.AsReadOnly();
 
     private UserSubscription()
     {
         Id = Guid.NewGuid();
     }
 
-    // سازنده آپدیت شده برای پذیرش آیدی فاکتور
     public UserSubscription(Guid userId, Guid planId, Guid? invoiceId, bool requiresPayment)
     {
         if (userId == Guid.Empty) throw new ArgumentException("UserId required");
@@ -40,6 +42,7 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         PlanId = planId;
         InvoiceId = invoiceId;
         StartDate = DateTime.UtcNow;
+        HasSignedCovenant = false; // پیش‌فرض تعهدنامه‌ای امضا نشده است
 
         // اگر نیاز به پرداخت دارد، وضعیت معلق می‌گیرد، در غیر اینصورت فعال می‌شود
         Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
@@ -58,6 +61,7 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         StartDate = startDate;
         EndDate = endDate;
         NotificationPreferencesJson = notificationPreferencesJson;
+        HasSignedCovenant = false;
 
         Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
     }
@@ -71,77 +75,76 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         }
     }
 
-    public void MarkTaskAsComplete(Guid planTemplateItemId, int valueEntered = 0, bool requiresUnbrokenChain = false)
+    /// <summary>
+    /// ثبت یا بروزرسانی پیشرفت یک تسک با پشتیبانی از زنجیره پیوسته و تاخیر (تعهدنامه)
+    /// </summary>
+    public void RecordTaskProgress(Guid taskId, int dayNumber, bool isDone, int countCompleted, bool isLateEntry, bool requiresUnbrokenChain)
     {
+        // ۱. بررسی وضعیت کلی چله
         if (Status != SubscriptionStatus.Active)
-            throw new DomainException("Cannot update progress on an inactive or failed subscription.");
+            throw new DomainException("نمی‌توانید پیشرفت را در یک چله غیرفعال یا پایان‌یافته ثبت کنید.");
 
-        var today = DateTime.UtcNow.Date;
-
-        // --- منطق بررسی زنجیره پیوسته (Unbroken Chain) ---
-        if (requiresUnbrokenChain)
+        // ۲. منطق بررسی زنجیره پیوسته (Unbroken Chain)
+        // اگر تسک نیاز به پیوستگی دارد و روز اول نیستیم، باید چک کنیم روز قبل انجام شده باشد
+        if (requiresUnbrokenChain && dayNumber > 1)
         {
-            var yesterday = today.AddDays(-1);
+            int previousDay = dayNumber - 1;
+            
+            var previousDayProgress = _dailyProgresses.FirstOrDefault(p => 
+                p.TaskId == taskId && p.DayNumber == previousDay);
 
-            // فقط در صورتی چک می‌کنیم که اشتراک کاربر حداقل از دیروز شروع شده باشد
-            if (StartDate.Date <= yesterday)
+            // اگر روز قبل هیچ رکوردی ندارد، یا رکوردی دارد ولی کامل نشده است
+            if (previousDayProgress == null || (!previousDayProgress.IsDone && previousDayProgress.CountCompleted == 0))
             {
-                // پیدا کردن پیشرفت روز قبل برای همین تسک
-                var yesterdayProgress = _progress.SingleOrDefault(p =>
-                    p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == yesterday);
-
-                // اگر دیروز این تسک انجام نشده است
-                if (yesterdayProgress == null || !yesterdayProgress.IsCompleted)
-                {
-                    // چله را فیلد می‌کنیم
-                    FailSubscription();
-                    throw new DomainException(
-                        "شما این تسک را در روز قبل انجام نداده‌اید. زنجیره این چله شکسته شده است و متأسفانه نیازمند شروع مجدد هستید.");
-                }
+                // زنجیره شکسته شده است! چله باطل می‌شود.
+                FailSubscription();
+                throw new DomainException(
+                    $"زنجیره این تسک شکسته شد! شما تسک مربوط به روز {previousDay} را انجام نداده‌اید. " +
+                    "طبق قوانین این چله، در صورت قطع شدن زنجیره، چله باطل شده و باید از ابتدا شروع کنید.");
             }
         }
 
-        var existing = _progress.SingleOrDefault(p =>
-            p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
+        // ۳. پیدا کردن رکورد فعلی یا ایجاد رکورد جدید
+        var existingProgress = _dailyProgresses.FirstOrDefault(p => 
+            p.TaskId == taskId && p.DayNumber == dayNumber);
 
-        if (existing != null)
+        if (existingProgress != null)
         {
-            existing.UpdateValue(valueEntered, false, null);
+            // بروزرسانی رکوردی که از قبل برای این روز وجود داشته
+            existingProgress.UpdateProgress(isDone, countCompleted, isLateEntry);
         }
         else
         {
-            _progress.Add(new DailyProgress(planTemplateItemId, today, valueEntered));
+            // ثبت پیشرفت جدید
+            _dailyProgresses.Add(new DailyProgress(Id, taskId, dayNumber, isDone, countCompleted, isLateEntry));
         }
 
         UpdateAudit();
     }
 
-    public void MarkTaskAsCompleteWithCommitment(Guid planTemplateItemId, int valueEntered, string commitmentReason)
+    /// <summary>
+    /// امضای تعهدنامه توسط کاربر (برای باز کردن قفل ویرایش روزهای گذشته)
+    /// </summary>
+    public void SignRetroactiveCovenant()
     {
         if (Status != SubscriptionStatus.Active)
-            throw new InvalidOperationException("Cannot update progress on an inactive subscription.");
+            throw new DomainException("تعهدنامه فقط برای چله‌های فعال قابل امضا است.");
 
-        var today = DateTime.UtcNow.Date;
+        if (HasSignedCovenant)
+            throw new DomainException("شما قبلاً تعهدنامه این چله را امضا کرده‌اید.");
 
-        var existing = _progress.SingleOrDefault(p =>
-            p.PlanTemplateItemId == planTemplateItemId && p.ScheduledDate.Date == today);
-
-        if (existing != null)
-        {
-            existing.UpdateValue(valueEntered, true, commitmentReason);
-        }
-        else
-        {
-            _progress.Add(new DailyProgress(planTemplateItemId, today, valueEntered, true, commitmentReason));
-        }
-
+        HasSignedCovenant = true;
         UpdateAudit();
     }
+
+    // ==========================================
+    // متدهای مدیریت وضعیت چله (Status Management)
+    // ==========================================
 
     public void CancelSubscription()
     {
-        if (Status == SubscriptionStatus.Completed)
-            throw new InvalidOperationException("Cannot cancel a completed subscription.");
+        if (Status == SubscriptionStatus.Completed || Status == SubscriptionStatus.Failed)
+            throw new DomainException("این چله قبلاً پایان یافته است و قابل لغو نیست.");
 
         Status = SubscriptionStatus.Canceled;
         EndDate = DateTime.UtcNow;

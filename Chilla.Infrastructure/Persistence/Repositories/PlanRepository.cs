@@ -27,6 +27,14 @@ public class PlanRepository : IPlanRepository
             .AsNoTracking() // برای لیست‌ها جهت افزایش سرعت Read-Only
             .ToListAsync(cancellationToken);
     }
+    
+    public async Task<List<Plan>> GetPlansByIdsAsync(IEnumerable<Guid> planIds, CancellationToken cancellationToken = default)
+    {
+        return await _context.Plans
+            .Include(p => p.Items) // اگر در داشبورد به تسک‌ها هم نیاز دارید این خط بماند، در غیر این صورت می‌توانید حذفش کنید
+            .Where(p => planIds.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+    }
 
     public async Task AddAsync(Plan plan, CancellationToken cancellationToken = default)
     {

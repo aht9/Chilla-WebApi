@@ -1,5 +1,6 @@
 ﻿using Chilla.Domain.Aggregates.SubscriptionAggregate;
 using Chilla.Domain.Common;
+using Microsoft.EntityFrameworkCore; // در صورت نیاز
 
 namespace Chilla.Infrastructure.Persistence.Repositories;
 
@@ -12,13 +13,19 @@ public class SubscriptionRepository : ISubscriptionRepository
         _context = context;
     }
 
+    /// <summary>
+    /// واکشی اشتراک به همراه تمام پیشرفت‌های روزانه (جهت ثبت پیشرفت جدید و بررسی بیزینس رول‌ها)
+    /// </summary>
     public async Task<UserSubscription?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _context.UserSubscriptions
-            .Include(s => s.Progress) // لود کردن جدول مهم Progress
+            .Include(s => s.DailyProgresses) // بسیار مهم: این Include باعث می‌شود متد RecordTaskProgress به درستی کار کند
             .SingleOrDefaultAsync(s => s.Id == id, cancellationToken);
     }
 
+    /// <summary>
+    /// واکشی چله فعال کاربر بر اساس آیدی پلن
+    /// </summary>
     public async Task<UserSubscription?> GetActiveByUserIdAndPlanIdAsync(Guid userId, Guid planId, CancellationToken cancellationToken = default)
     {
         return await _context.UserSubscriptions
@@ -28,10 +35,14 @@ public class SubscriptionRepository : ISubscriptionRepository
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// واکشی تمام چله‌های یک کاربر (نکته: برای داشبورد و لیست‌های نمایشی ما از Dapper استفاده کردیم که بهینه‌تر است، 
+    /// اما وجود این متد برای عملیات دامین و Command ها مفید است)
+    /// </summary>
     public async Task<List<UserSubscription>> GetByUserIdWithProgressAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         return await _context.UserSubscriptions
-            .Include(s => s.Progress)
+            .Include(s => s.DailyProgresses)
             .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.StartDate)
             .ToListAsync(cancellationToken);
@@ -44,6 +55,8 @@ public class SubscriptionRepository : ISubscriptionRepository
 
     public void Update(UserSubscription subscription)
     {
+        // در EF Core وقتی موجودیت را Track کرده باشیم، خود SaveChanges تغییرات را می‌فهمد
+        // اما فراخوانی 명ریح Update برای اطمینان در برخی سناریوها مشکلی ندارد
         _context.UserSubscriptions.Update(subscription);
     }
     
