@@ -34,22 +34,6 @@ public class PlansController : ControllerBase
         return Ok(result);
     }
 
-    public record PurchasePlanRequest(List<UserNotificationPreferenceDto> UserPreferences);
-
-    /// <summary>
-    /// خرید یا افزودن یک پلن به داشبورد کاربر
-    /// </summary>
-    [HttpPost("{id}/purchase")]
-    public async Task<IActionResult> PurchasePlan(Guid id, [FromBody] PurchasePlanRequest request)
-    {
-        var preferences = request?.UserPreferences ?? new List<UserNotificationPreferenceDto>();
-        var command = new PurchasePlanCommand(id, preferences);
-        var subscriptionId = await _mediator.Send(command);
-
-        return Ok(new
-            { SubscriptionId = subscriptionId, Message = "پلن با موفقیت خریداری و به داشبورد شما اضافه شد." });
-    }
-
     // ==========================================
     // بخش جدید: داشبورد کاربری و مدیریت پیشرفت
     // ==========================================

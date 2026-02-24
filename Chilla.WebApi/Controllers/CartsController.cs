@@ -1,5 +1,6 @@
 ﻿using Chilla.Application.Features.Carts.Commands;
 using Chilla.Application.Features.Carts.Queries;
+using Chilla.Application.Features.Subscriptions.Commands;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,11 +26,16 @@ public class CartsController : ControllerBase
         return Ok(cart);
     }
 
+    public record AddToCartRequest(List<UserNotificationPreferenceDto>? UserPreferences);
+
     [HttpPost("items/{planId:guid}")]
-    public async Task<IActionResult> AddItemToCart(Guid planId)
+    [ProducesResponseType(200)]
+    public async Task<IActionResult> AddPlanToCart(Guid id, [FromBody] AddToCartRequest request)
     {
-        await _mediator.Send(new AddToCartCommand(planId));
-        return Ok(new { Message = "چله با موفقیت به سبد خرید اضافه شد." });
+        var command = new AddToCartCommand(id, request.UserPreferences);
+        await _mediator.Send(command);
+
+        return Ok(new { Message = "پلن با موفقیت به سبد خرید شما اضافه شد." });
     }
 
     [HttpDelete("items/{planId:guid}")]
@@ -59,13 +65,15 @@ public class CartsController : ControllerBase
     public async Task<IActionResult> Checkout()
     {
         var result = await _mediator.Send(new CheckoutCartCommand());
-        
+
         // اگر در فاز فعلی می‌خواهید جلوی خریدهای پولی را بگیرید، 
         // می‌توانید اینجا چک کنید و BadRequest برگردانید:
         if (result.RequiresPayment)
         {
-            return BadRequest(new { 
-                Message = "در حال حاضر اتصال به درگاه پرداخت امکان‌پذیر نیست. لطفاً از کد تخفیف ۱۰۰ درصدی استفاده نمایید.",
+            return BadRequest(new
+            {
+                Message =
+                    "در حال حاضر اتصال به درگاه پرداخت امکان‌پذیر نیست. لطفاً از کد تخفیف ۱۰۰ درصدی استفاده نمایید.",
                 PayableAmount = result.PayableAmount
             });
         }

@@ -32,19 +32,19 @@ public class UserSubscription : BaseEntity, IAggregateRoot
         Id = Guid.NewGuid();
     }
 
-    public UserSubscription(Guid userId, Guid planId, Guid? invoiceId, bool requiresPayment)
+    public UserSubscription(Guid userId, Guid planId, Guid? invoiceId, bool requiresPayment, int durationInDays, string? notificationPreferencesJson)
     {
-        if (userId == Guid.Empty) throw new ArgumentException("UserId required");
-        if (planId == Guid.Empty) throw new ArgumentException("PlanId required");
-
         Id = Guid.NewGuid();
         UserId = userId;
         PlanId = planId;
         InvoiceId = invoiceId;
+    
         StartDate = DateTime.UtcNow;
-        HasSignedCovenant = false; // پیش‌فرض تعهدنامه‌ای امضا نشده است
+        EndDate = StartDate.AddDays(durationInDays); // تنظیم اتوماتیک تاریخ پایان
+    
+        NotificationPreferencesJson = notificationPreferencesJson;
+        HasSignedCovenant = false;
 
-        // اگر نیاز به پرداخت دارد، وضعیت معلق می‌گیرد، در غیر اینصورت فعال می‌شود
         Status = requiresPayment ? SubscriptionStatus.PendingPayment : SubscriptionStatus.Active;
     }
 

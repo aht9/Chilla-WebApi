@@ -6,7 +6,7 @@ namespace Chilla.Domain.Aggregates.CartAggregate;
 public class Cart : BaseEntity, IAggregateRoot
 {
     public Guid UserId { get; private set; }
-    
+
     private readonly List<CartItem> _items = new();
     public IReadOnlyCollection<CartItem> Items => _items.AsReadOnly();
 
@@ -14,19 +14,21 @@ public class Cart : BaseEntity, IAggregateRoot
     public Guid? CouponId { get; private set; }
     public string? CouponCode { get; private set; }
 
-    private Cart() { }
+    private Cart()
+    {
+    }
 
     public Cart(Guid userId)
     {
         UserId = userId;
     }
 
-    public void AddItem(Guid planId, decimal price)
+    public void AddItem(Guid planId, decimal price, string? preferencesJson = null)
     {
         if (_items.Any(i => i.PlanId == planId))
             throw new DomainException("این چله از قبل در سبد خرید شما وجود دارد.");
 
-        _items.Add(new CartItem(planId, price));
+        _items.Add(new CartItem(planId, price, preferencesJson));
     }
 
     public void RemoveItem(Guid planId)
@@ -60,7 +62,7 @@ public class Cart : BaseEntity, IAggregateRoot
     }
 
     public decimal GetTotalAmount() => _items.Sum(i => i.Price);
-    
+
     public void ClearCart()
     {
         _items.Clear();
