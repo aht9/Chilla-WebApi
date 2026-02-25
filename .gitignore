@@ -1,5 +1,9 @@
 bin/
 obj/
 /packages/
+/.idea
+Chilla.WebApi/logs
 riderModule.iml
 /_ReSharper.Caches/
+Chilla-WebApi.sln.DotSettings.user
+
